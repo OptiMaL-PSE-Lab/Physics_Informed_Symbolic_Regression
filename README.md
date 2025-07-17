@@ -63,7 +63,7 @@ Overfitting is inherently controlled at two distinct stages of the PI-ADoK workf
 
 Because the model $\eta$ is differentiable, its derivative, $\dot{\eta}(t^{(i)})$, serves as an approximation for the true rates, i.e., $\dot{\eta}(t^{(i)}) \approx r^{(i)}$. With these rate estimates in hand, we can formulate the optimization problem as follows. At the outer level, we optimize over candidate models of fixed complexity $\kappa$ by minimizing the sum of the fitting error and a penalty term that is proportional to the degree of constraint violation:
 
-$$m^\star = \arg\min_{m \in \mathcal{M}^\kappa}.$$
+$$m^\star = \arg\min_{m \in \mathcal{M}^\kappa} \lbrace \sum_{i=1}^{n_t} \ell \left(\hat{r}_m(t^{(i)} \mid \theta_m), r^{(i)}\right) + \sum_{j=1}^{J} \lambda_j \, P_j(m) \rbrace.$$
 
 At the inner level, we optimize the parameters of the selected model $m^\star$ as follows:
 
