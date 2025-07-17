@@ -1,0 +1,14 @@
+Concentration models:
+    For both products and reactants: 
+        -> at time x and x-1, the difference of concentrations should be close to zero (for large x's)
+        -> maybe enforce that at time 0, concentration models must start from the initial concentrations
+
+Rate models:
+    For products:
+        -> it must be positive at all times
+        -> it monotonically decreases
+        -> at time x and x-1, the difference of concentrations should be close to zero (for large x's)
+    For reactants:
+        -> it must be negative at all times
+        -> it monotonically increases
+        -> at time x and x-1, the difference of concentrations should be close to zero (for large x's)
