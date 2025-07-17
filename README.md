@@ -21,13 +21,13 @@ In our framework, variables are represented as state vectors $x \in \mathbb{R}^{
 
 A symbolic model $m \in \mathcal{M}$ is characterized by a finite set of parameters $\theta_m$, whose dimensionality $d_m$ depends on the specific model. We denote the model's prediction under parameters $\theta_m$ as $m(\cdot \mid \theta_m)$, and we represent the predicted value by $\hat{y}_m$ (i.e., $\hat{y}_m = m(\cdot \mid \theta_m)$). Crucially, our approach has two phases, which emulates well a bi-level optimization problem: the first phase (or inner problem) where the main objective is to find the optimal model structure, and the second (or outer problem) where the main objective is to fine-tune the optimal model structure and discover its optimal parameters. We define the optimal model $m^*$ as the model that minimizes the sum of the data fitting error and a penalty term proportional to the degree of constraint violation. Formally, this is expressed as:
 
-$$m^* = \arg\min_{m \in \mathcal{M}} \lbrace \sum_{i=1}^{n_t} \ell \left( \hat{y}_m^{(i)}, y^{(i)} \right) + \sum_{i=1}^{n_t} \lambda_j \, P_j(m) \rbrace,$$
+$m^* = \arg\min_{m \in \mathcal{M}} \lbrace \sum_{i=1}^{n_t} \ell \left( \hat{y}_m^{(i)}, y^{(i)} \right) + \sum_{j=1}^{J} \lambda_j \, P_j(m) \rbrace,$
 
 where $P_j(m)$ quantifies the violation of the $j$-th constraint, $\lambda_j$ is a constant scaling factor specific to that constraint, and $J$ is the total number of constraints.
 
 The corresponding optimal parameters are determined by
 
-$$\theta_{m^*}^* = \arg\min_{\theta_{m^*}} \lbrace\sum_{i=1}^{n_t} \ell\left( \hat{y}_{m^*}^{(i)}, y^{(i)} \right) + \sum_{j=1}^{J} \lambda_j \, P_j(m)\rbrace.$$
+$\theta_{m^*}^* = \arg\min_{\theta_{m^*}} \lbrace\sum_{i=1}^{n_t} \ell\left( \hat{y}_{m^*}^{(i)}, y^{(i)} \right) + \sum_{j=1}^{J} \lambda_j \, P_j(m)\rbrace.$
 
 In the context of dynamical systems, the state variables are functions of time, $x(t) \in \mathbb{R}^{n_x}$, representing the evolution of the system over a fixed interval $\Delta t = [t_0, t_f]$. The system dynamics are characterized by the time derivatives $\dot{x}(t) \in \mathbb{R}^{n_x}$ and the initial condition $x_0 = x(t_0)$.
 
@@ -55,7 +55,7 @@ Before getting into the detailed explanations of model generation, model selecti
 
 For PI-ADoK, which leverages the strong formulation of symbolic regression, the primary objective is to determine the model $m$ that best maps the state variables $x(t)$ to the corresponding rates $r^{(i)}$, i.e.,
 
-$$\hat{r}_m(t \mid \theta_m) = m(x(t) \mid \theta_m).$$
+$\hat{r}_m(t \mid \theta_m) = m(x(t) \mid \theta_m).$
 
 Since direct measurements of the rates $r^{(i)}$ are unavailable, they must first be estimated from the concentration data $C^{(i)}$. To this end, our approach constructs an intermediate symbolic model $\eta$ that approximates the concentration measurements, such that $\eta(t^{(i)}) \approx C^{(i)}$. This process follows the standard symbolic regression procedure, as described in the first and second equation shown, with the associated model selection methodology detailed in the below section ("Model Selection").
 
@@ -63,11 +63,11 @@ Overfitting is inherently controlled at two distinct stages of the PI-ADoK workf
 
 Because the model $\eta$ is differentiable, its derivative, $\dot{\eta}(t^{(i)})$, serves as an approximation for the true rates, i.e., $\dot{\eta}(t^{(i)}) \approx r^{(i)}$. With these rate estimates in hand, we can formulate the optimization problem as follows. At the outer level, we optimize over candidate models of fixed complexity $\kappa$ by minimizing the sum of the fitting error and a penalty term that is proportional to the degree of constraint violation:
 
-$$m^\star = \arg\min_{m \in \mathcal{M}^\kappa} \lbrace \sum_{i=1}^{n_t} \ell \left(\hat{r}_m(t^{(i)} \mid \theta_m), r^{(i)}\right) + \sum_{j=1}^{J} \lambda_j \, P_j(m) \rbrace.$$
+$m^\star = \arg\min_{m \in \mathcal{M}^\kappa} \lbrace \sum_{i=1}^{n_t} \ell \left(\hat{r}_m(t^{(i)} \mid \theta_m), r^{(i)}\right) + \sum_{j=1}^{J} \lambda_j \, P_j(m) \rbrace.$
 
 At the inner level, we optimize the parameters of the selected model $m^\star$ as follows:
 
-$$\theta_{m^\star}^\star = \arg\min_{\theta_{m^\star}} \lbrace\sum_{i=1}^{n_t} \ell \left(\hat{r}_{m^\star}(t^{(i)} \mid \theta_{m^\star}), r^{(i)}\right) + \sum_{j=1}^{J} \lambda_j \, P_j(m) \rbrace.$$
+$\theta_{m^\star}^\star = \arg\min_{\theta_{m^\star}} \lbrace\sum_{i=1}^{n_t} \ell \left(\hat{r}_{m^\star}(t^{(i)} \mid \theta_{m^\star}), r^{(i)}\right) + \sum_{j=1}^{J} \lambda_j \, P_j(m) \rbrace.$
 
 In both the second and fifth equation shown, the function $\ell$ represents the sum of squared errors (SSE). The Limited-memory Broyden-Fletcher-Goldfarb-Shanno (L-BFGS) algorithm is employed for solving the parameter estimation problem. L-BFGS is well-suited for handling this problem due to its performance in tasks pertaining to parameter estimation and optimization. The stopping criteria for the optimization are left to the default options in the Scipy package, and a multi-start approach is employed, where multiple runs are initiated with different starting points, and the best solution is retained. A schematic overview of the complete PI-ADoK workflow is shown below.
 
