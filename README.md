@@ -1,8 +1,9 @@
 # The Automated Discovery of Kinetic Rate Models - Methodological Frameworks
 
-The industrialization of catalytic processes requires reliable kinetic models for their design, optimization and control. Mechanistic models require significant domain knowledge, while data-driven and hybrid models lack interpretability. Automated knowledge discovery methods, such as ALAMO, SINDy, and genetic programming, have gained popularity but suffer from limitations such as needing model structure assumptions, exhibiting poor scalability, and displaying sensitivity to noise. To overcome these challenges, we propose two methodological frameworks, ADoK-S and ADoK-W, for the automated generation of catalytic kinetic models using a robust criterion for model selection. We leverage genetic programming for model generation and a sequential optimization routine for model refinement. The frameworks are tested against three case studies of increasing complexity, demonstrating their ability to retrieve the underlying kinetic rate model with limited noisy data from the catalytic systems, showcasing their potential for chemical reaction engineering applications.
+The industrialization of catalytic processes hinges on the availability of reliable kinetic models for design, optimization, and control. Traditional mechanistic models demand extensive domain expertise, while many data-driven approaches often lack interpretability and fail to enforce physical consistency. To overcome these limitations, we propose the Physics-Informed Automated Discovery of Kinetics (PI-ADoK) framework. By integrating physical constraints directly into a symbolic regression approach, PI-ADoK narrows the search space and substantially reduces the number of experiments required for model convergence. Additionally, the framework incorporates a robust uncertainty quantification strategy via the Metropolis-Hastings algorithm, which propagates parameter uncertainty to yield credible prediction intervals. Benchmarking our method against conventional approaches across several catalytic case studies demonstrates that PI-ADoK not only enhances model fidelity but also lowers the experimental burden, highlighting its potential for efficient and reliable kinetic model discovery in chemical reaction engineering.
 
-> Carvalho Servia, M., Sandoval, I., Hellgardt, K., Hii, K., Zhang, D., & Rio Chanona, E.. (2023). The Automated Discovery of Kinetic Rate Models – Methodological Frameworks. https://doi.org/10.48550/arxiv.2301.11356
+> Carvalho Servia, M., Sandoval, I., Hellgardt, K., Hii, K., Zhang, D., & Rio Chanona, E.. (2025). Constraint-Guided Symbolic Regression for Data-Efficient Kinetic Model Discovery. 
+https://doi.org/10.48550/arXiv.2507.02730
 
 
 ## Methodology
@@ -12,92 +13,141 @@ The industrialization of catalytic processes requires reliable kinetic models fo
 
 ### Notation
 
-Here we set the necessary mathematical notation to describe our methods precisely.
-We start from the standard symbolic regression formulation to later introduce the weak and strong variations of our framework.
+We begin by establishing the mathematical notation necessary to precisely describe our methodology. First, we adopt the standard symbolic regression formulation, which serves as the foundation before introducing the strong formulation of our approach.
 
-The domain set $\mathcal{Z}$ is the union of an arbitrary number of constants $\Gamma$ and a fixed number of variables $\mathcal{X}$.
-The operator set $\mathcal{P}$ is the union of arithmetic operations ($\diamond: \mathbb{R}^2 \rightarrow \mathbb{R}$) and a finite set of special one-dimensional functions ($\Lambda: \mathbb{R} \rightarrow \mathbb{R}$).
-The model search space $\mathcal{M}$ is the space of possible expressions to be reached by iterative function composition of the operator set $\mathcal{P}$ over the domain set $\mathcal{Z}$.
+Let the set $\mathcal{Z}$ be defined as the union of an arbitrary collection of constants, $\Gamma$, and a fixed set of variables, $\mathcal{X}$. The operator set $\mathcal{P}$ consists of both arithmetic operations ($\diamond: \mathbb{R}^n \rightarrow \mathbb{R}$) and a finite collection of special one-dimensional functions ($\Lambda: \mathbb{R} \rightarrow \mathbb{R}$). Through iterative function composition using the operators in $\mathcal{P}$ over the elements in $\mathcal{Z}$, we form the model search space $\mathcal{M}$.
 
-The variables can be represented as state vectors $x \in \mathbb{R}^{n_x}$.
-A data point is a pair of specific states $x$ and the associated target value $y \in \mathbb{R}$ of an unknown function $f: \mathbb{R}^{n_x} \rightarrow \mathbb{R}$: $y=f(x)$.
-The data set $\mathcal{D}$ consists of $n_t$ data points: $\mathcal{D} = \lbrace(x^{(i)}, y^{(i)}) \mid  i = 1, \ldots, n_t \rbrace$.
-To quantify the discrepancy between the predictions and the target values, we can leverage any adequate positive measure function $\ell:\mathbb{R}^{n} \times \mathbb{R}^{n} \rightarrow \mathbb{R}^+$.
+In our framework, variables are represented as state vectors $x \in \mathbb{R}^{n_x}$. Each data point comprises a state $x$ and its corresponding target value $y \in \mathbb{R}$ generated by an unknown function $f: \mathbb{R}^{n_x} \rightarrow \mathbb{R}$, such that $y = f(x)$. Collectively, the dataset is given by $\mathcal{D} = \left\{ \left( x^{(i)}, y^{(i)} \right) \mid i = 1, \ldots, n_t \right\}$. To measure the discrepancy between predictions and target values, we employ a suitable positive-valued function $\ell: \mathbb{R}^{n} \times \mathbb{R}^{n} \rightarrow \mathbb{R}^{+}$.
 
-A symbolic model $m \in \mathcal{M}$ has a finite set of parameters $\theta_m$ whose dimension $d_m$ depends on the model.
-We denote the prediction of a model under specific parameter values in functional form as $m(\cdot\mid\theta_m)$.
-We use $\hat{y}_m$ to denote the prediction of a value coming from a proposed model $m$ (i.e., $\hat{y}_m = m(\cdot \mid \theta_m) $).
+A symbolic model $m \in \mathcal{M}$ is characterized by a finite set of parameters $\theta_m$, whose dimensionality $d_m$ depends on the specific model. We denote the model's prediction under parameters $\theta_m$ as $m(\cdot \mid \theta_m)$, and we represent the predicted value by $\hat{y}_m$ (i.e., $\hat{y}_m = m(\cdot \mid \theta_m)$). Crucially, our approach has two phases, which emulates well a bi-level optimization problem: the first phase (or inner problem) where the main objective is to find the optimal model structure, and the second (or outer problem) where the main objective is to fine-tune the optimal model structure and discover its optimal parameters. We define the optimal model $m^*$ as the model that minimizes the sum of the data fitting error and a penalty term proportional to the degree of constraint violation. Formally, this is expressed as:
 
-For our purposes, it is important to decouple the model generation step from the parameter optimization for each model.
-An optimal model $m^*$ is defined as
+$$m^* = \argmin_{m \in \mathcal{M}} \left\{ \sum_{i=1}^{n_t} \ell\left( \hat{y}_m^{(i)}, y^{(i)} \right) + \sum_{j=1}^{J} \lambda_j \, P_j(m) \right\},$$
 
-$$m^*=\arg\min_{m \in \mathcal{M}} \sum_{i=1}^{n_t}{\ell\left(\hat{y}_m^{(i)}, y^{(i)}\right)},$$
+where $P_j(m)$ quantifies the violation of the $j$-th constraint, $\lambda_j$ is a constant scaling factor specific to that constraint, and $J$ is the total number of constraints.
 
-and its optimal parameters are such that
+The corresponding optimal parameters are determined by
 
-$$\theta_{m^\*}^\* = \arg\min_{\theta_{m^\*}^\*} \sum_{i=1}^{n_t}{\ell\left(\hat{y}_{m^\*}^{(i)}, y^{(i)}\right)}.$$
+$$\theta_{m^*}^* = \argmin_{\theta_{m^*}} \left\{\sum_{i=1}^{n_t} \ell\left( \hat{y}_{m^*}^{(i)}, y^{(i)} \right) + \sum_{j=1}^{J} \lambda_j \, P_j(m)\right\}.$$
 
-In dynamical systems, the state variables are a function of time, $x(t) \in \mathbb{R}^{n_x}$, and represent the evolution of the real dynamical system within a fixed time interval $\Delta t = [t_0, t_f]$.
-The dynamics are defined by the rates of change $\dot{x}(t) \in \mathbb{R}^{n_x}$ and the initial condition $x_0 = x(t=t_0)$.
+In the context of dynamical systems, the state variables are functions of time, $x(t) \in \mathbb{R}^{n_x}$, representing the evolution of the system over a fixed interval $\Delta t = [t_0, t_f]$. The system dynamics are characterized by the time derivatives $\dot{x}(t) \in \mathbb{R}^{n_x}$ and the initial condition $x_0 = x(t_0)$.
 
-For our kinetic rate models, we assume that the $n_t$ sampling times are set within the fixed time interval, $t^{(i)} \in \Delta t$.
-The concentration measurements $C$ at each time point $t^{(i)}$ are samples of the real evolution of the system $C^{(i)} \approx x(t^{(i)})$, while the rate estimates $r$ are an approximation to the rate of change $r^{(i)} \approx \dot{x}(t^{(i)})$.
+For our kinetic rate models, we assume that the $n_t$ sampling times $t^{(i)}$ lie within the interval $\Delta t$. The concentration measurements $C$ at each time $t^{(i)}$ approximate the true state $x(t^{(i)})$, while the rate estimates $r$ approximate the corresponding time derivatives, $r^{(i)} \approx \dot{x}(t^{(i)})$. Thus, the dataset becomes $\mathcal{D} = \left\{ \left( t^{(i)}, C^{(i)} \right) \mid i = 1, \ldots, n_t \right\}.$
 
-Here the available data set $\mathcal{D}$ is formed by ordered pairs of time and state measurements $\mathcal{D} = \{(t^{(i)}, C^{(i)})\mid i = 1,\ldots, n_t\}$.
-As before, we use a hat to denote the prediction of either states $\hat{C}_m$ or rates $\hat{r}_m$ coming from a proposed model $m$.
-The output of the models with specific parameters $\theta_m$ are denoted as $\hat{C}_m(\cdot \mid \theta_m)$ and  $\hat{r}_m(\cdot\mid\theta_m)$, respectively.
+As before, we denote model predictions by a hat: $\hat{C}_m$ for states and $\hat{r}_m$ for rates, with the outputs given by $\hat{C}_m(\cdot \mid \theta_m)$ and $\hat{r}_m(\cdot \mid \theta_m)$, respectively.
 
-The complexity of a model is denoted as $\mathcal{C}(m)$ (here we use the number of nodes in an expression tree as the complexity of a symbolic expression).
-We distinguish between families of expressions with different levels of complexity $\kappa \in \mathbb{N}$ as $\mathcal{M}^\kappa = \lbrace m \in \mathcal{M} \mid \mathcal{C}(m) = \kappa \rbrace$.
+We quantify the complexity of a model using the function $\mathcal{C}(m)$, here defined as the number of nodes in the expression tree representing the model. Models can then be grouped into families based on their complexity level $\kappa \in \mathbb{N}$, denoted as $\mathcal{M}^\kappa = \left\{ m \in \mathcal{M} \mid \mathcal{C}(m) = \kappa \right\}.$
 
-### ADoK-S
-For ADoK-S, the objective is to find the model $m$ that best maps the states to the rates:
+This notation establishes the mathematical foundation for our methodology, facilitating a clear and systematic description of our approach to automated kinetic model discovery.
+
+### Introduction to the Strong Formulation
+Before getting into the detailed explanations of model generation, model selection, mathematical constraints, and uncertainty quantification, we first provide a concise, itemised workflow of PI-ADoK. This overview will serve as a road-map for the discussion that follows.
+
+1. **Data collection:** Acquire time–series concentrations $\!\bigl(t,\;C_i(t)\bigr)$ of all reactants and products.
+2. **Generate constrained concentration surrogates:** Employ genetic programming with embedded physical constraints (positivity, equilibrium,\,\dots) to build differentiable symbolic models $\eta_i(t)$ that fit the measured $C_i(t)$.
+3. **Parameter refinement (concentration):** Calibrate every surrogate by solving the second equation shown to obtain $\theta_{\eta_i}^{\star}$.
+4. **Model selection (concentration):** Use $\mathrm{AIC}$ to pick the most accurate yet parsimonious $\eta_i(t)$ from the model set for each chemical species in each experiment.
+5. **Derivative estimation:** Differentiate the chosen $\eta_i(t)$; the derivatives $\dot{\eta}_i(t)$ provide rate estimates $r_i(t)$.
+6. **Generate constrained rate model candidates:** Apply genetic programming with constraints to the rate data, yielding a set $\mathcal M^{\kappa}$ of symbolic rate models for each complexity $\kappa$.
+7. **Parameter refinement (rates):** Optimize every rate model by solving the inner problem in the fifth equation shown.
+8. **Model selection (rates):} Rank the $\kappa$-winners with $\mathrm{AIC}$ and select the final kinetic expression $m^{\star}$.
+9. **Optional MBDoE loop:** If $m^{\star}$ is unsatisfactory and budget remains, use model-based design of experiments to propose new conditions (default: discriminate between the best and second-best rate models), collect data, and return to Step 2.
+10. **Uncertainty quantification:** For the accepted model, quantify parameter uncertainty (with Metropolis–Hastings) and propagate it to obtain predictive intervals.
+
+For PI-ADoK, which leverages the strong formulation of symbolic regression, the primary objective is to determine the model $m$ that best maps the state variables $x(t)$ to the corresponding rates $r^{(i)}$, i.e.,
 
 $$\hat{r}_m(t \mid \theta_m) = m(x(t) \mid \theta_m).$$
 
-For this to be done directly, an estimation of the rates of change $r^{(i)}$ must be derived from the available concentration measurements $C^{(i)}$. To solve this, our approach forms an intermediate symbolic model $\eta$ such that $\eta(t^{(i)}) \approx C^{(i)}$ following the standard symbolic regression procedure, described in the equations presented above, with our model selection process described below.
+Since direct measurements of the rates $r^{(i)}$ are unavailable, they must first be estimated from the concentration data $C^{(i)}$. To this end, our approach constructs an intermediate symbolic model $\eta$ that approximates the concentration measurements, such that $\eta(t^{(i)}) \approx C^{(i)}$. This process follows the standard symbolic regression procedure, as described in the first and second equation shown, with the associated model selection methodology detailed in the below section ("Model Selection").
 
-Since this model is differentiable, its derivatives provide an approximation to the desired rates: $\dot{\eta}\left(t^{(i)}\right) \approx r^{(i)}$. With these estimated values available, the optimization problem can be written as follows. The outer level optimizes over model proposals for a fixed level of complexity $\kappa$,
+Overfitting is inherently controlled at two distinct stages of the PI-ADoK workflow. First, during the genetic programming search, the population is arranged by structural complexity $\kappa$. For every admissible dimensionality (e.g.\ $\kappa = 3,4,5,\ldots$) the algorithm independently seeks and stores the best performing model before any cross-complexity comparison is made. This level-wise competition ensures that simple models are never forced to compete directly with much richer expressions and by defining an upper limit of complexity, the search process is prevented from drifting toward unnecessarily intricate solutions. Second, when the set of level-wise winners is compared to choose the final model, we employ the Akaike Information Criterion, which adds an explicit penalty that grows with the dimensionality of the model. By coupling complexity-arranged search with AIC-based selection, PI-ADoK guards against overfitting both during model generation and during the ultimate selection of the governing kinetic expression.
 
-$$m^\star = \arg\min_{m \in \mathcal{M^\kappa}} \sum_{i=1}^{n_t} \ell\left(\hat r_m(t^{(i)}\mid\theta_m), r^{(i)} \right),$$
+Because the model $\eta$ is differentiable, its derivative, $\dot{\eta}(t^{(i)})$, serves as an approximation for the true rates, i.e., $\dot{\eta}(t^{(i)}) \approx r^{(i)}$. With these rate estimates in hand, we can formulate the optimization problem as follows. At the outer level, we optimize over candidate models of fixed complexity $\kappa$ by minimizing the sum of the fitting error and a penalty term that is proportional to the degree of constraint violation:
 
-while the inner level optimizes over the best model's parameters,
+$$m^\star = \argmin_{m \in \mathcal{M}^\kappa} \left\{ \sum_{i=1}^{n_t} \ell \left(\hat{r}_m(t^{(i)} \mid \theta_m), r^{(i)}\right) + \sum_{j=1}^{J} \lambda_j \, P_j(m) \right\}.$$
 
-$$\theta_{m^\star}^\star = \arg\min_{\theta_{m^\star}} \sum_{i=1}^{n_t} \ell\left(\hat r_{m^\star}(t^{(i)}\mid\theta_{m^\star}), r^{(i)} \right).$$
+At the inner level, we optimize the parameters of the selected model $m^\star$ as follows:
 
-In the above equations, $\ell$ represents the residual sum of squares (RSS).
+$$\theta_{m^\star}^\star = \argmin_{\theta_{m^\star}} \left\{\sum_{i=1}^{n_t} \ell \left(\hat{r}_{m^\star}(t^{(i)} \mid \theta_{m^\star}), r^{(i)}\right) + \sum_{j=1}^{J} \lambda_j \, P_j(m) \right\}.$$
 
-### ADoK-W
-For ADoK-W, we aim to find the model $m$ that best maps state variables to the differential equation system that define the state dynamics to then predict the concentration evolution:
+In both the second and fifth equation shown, the function $\ell$ represents the sum of squared errors (SSE). The Limited-memory Broyden-Fletcher-Goldfarb-Shanno (L-BFGS) algorithm is employed for solving the parameter estimation problem. L-BFGS is well-suited for handling this problem due to its performance in tasks pertaining to parameter estimation and optimization. The stopping criteria for the optimization are left to the default options in the Scipy package, and a multi-start approach is employed, where multiple runs are initiated with different starting points, and the best solution is retained. A schematic overview of the complete PI-ADoK workflow is shown below.
 
-$$\dot x_m(t \mid \theta_m) = m(x(t)\mid \theta_m),$$
+![Alt text](pi_adok_flowchart.png)
+Figure 1: Step-by-step flow of PI-ADoK, highlighting the two main tasks: estimating derivatives (red box) and generating rate models (blue box). In the derivative-estimation phase, genetic programming produces candidate concentration models, followed by parameter estimation and model selection via AIC. These models are then numerically differentiated to approximate reaction rates. In the rate-modeling phase, the framework uses the estimated rates to build kinetic expressions, again refining candidates through parameter estimation and model selection. Model-based design of experiments (MBDoE) can propose new experiments to collect data if the current model is unsatisfactory, closing the loop until a reliable model is obtained. Uncertainty quantification is then performed on the final model to assess prediction reliability. Constraints are included in each step of model construction to guide the genetic programming algorithm to physically-sensible models.
 
-$$\hat C_m(t\mid \theta_m) = C_0 + \int_{t_0}^{t} \dot x_m(\tau \mid \theta_m) d\tau,$$
+The PI-ADoK framework is designed to handle complex chemical reaction scenarios, including cases with multiple reactions occurring in parallel or sequentially. In this work, however, we focus on single-reaction systems. For multi-reaction systems, the approach is significantly different. Instead of deriving a single unified model to describe the kinetic rates of all species, the chemical system would require PI-ADoK to develop individual models for each reactant and product. This is due to the fact that, in multi-reaction systems, the dynamics of each species are governed by distinct mathematical functions, with no direct stoichiometric relationships linking their rates. An example of applying the strong formulation of symbolic regression to multi-reaction systems is provided in the `Supplementary Information' of 
+https://doi.org/10.48550/arXiv.2301.11356.
 
-where the initial condition $C_0$ is the first concentration measurement. For this formulation, the outer level optimizes over model proposals for a specific complexity level $\kappa$ as well,
 
-$$m^\star = \arg\min_{m \in \mathcal{M^\kappa}} \sum_{i=1}^{n_t} \ell\left(\hat C_m(t^{(i)}\mid\theta_m), C^{(i)} \right),$$
+### Model Selection
 
-while the inner level optimizes over the parameters of the best model,
+Having outlined how PI-ADoK produces a level-wise set of candidate models (one best expression for every structural complexity $\kappa$) we now turn to the question of how to choose among those winners.  The selection step must favor models that are predictive yet parsimonious, thereby reinforcing the overfitting defenses already built into the search procedure.
 
-$$\theta_{m^\star}^\star = \arg\min_{\theta_{m^\star}} \sum_{i=1}^{n_t} \ell\left(\hat C_{m^\star}(t^{(i)}\mid\theta_{m^\star}), C^{(i)} \right).$$
+Instead of employing a data-splitting approach for model selection, PI-ADoK leverages an information criterion, allowing the entire dataset to be utilized for both model construction and evaluation. This is particularly beneficial in low-data environments, as it maximizes the amount of information available for identifying suitable kinetic models.
 
-Again, in the above equations, $\ell$ represents the RSS.
+We specifically adopt the Akaike Information Criterion (AIC) based on prior comparative analyses of different information criteria, where AIC consistently demonstrated superior performance in kinetic discovery. Formally, for a model $m$ with parameter set $\theta_m$ of dimension $d_m$, the AIC is given by:
 
-## Model Selection
-Given a model $m$ with parameters $\theta_m$ of dimension $d_m$, the Akaike information criterion (AIC) is defined as
+$$\text{AIC}_m = 2 \, NLL\bigl(\theta_m \mid \mathcal{D}\bigr) + 2\,d_m,$$
 
-$$\text{AIC}_m = 2\mathcal{L}(\mathbf{\theta}_m\mid\mathcal{D}) + 2d_m,$$
+where $NLL$ denotes the negative log-likelihood . When comparing two models $m_1$ and $m_2$, the one with the lower AIC value from the above equation is deemed preferable.
 
-where $\mathcal{L}$ represents specifically the negative log-likelihood (NLL). Given two competing models, $m_1$ and $m_2$, the preferred model would be the one with the lowest AIC value calculated by presented equation. The choice of AIC for model selection within the ADoK-S and ADoK-W framework is motivated in detail in the full paper.
 
-## Model-Based Design of Experiments
-It is possible that the data set used for the regression is not enough to provide an adequate model proposal. For this scenario, and under the assumption that the experimental budget is not fully spent, it is possible to leverage the implicit insights in the optimized models to extract an informative proposal for a new experiment. For this purpose, we may search for an initial condition which maximizes the discrepancy between state predictions $\hat x(t)$ of the best two proposed models, $\eta$ and $\mu$, using the available data set:
+### Model-Based Design of Experiments
 
-$$x_0^{(new)} = \arg\max_{x_0} \int_{t_0}^{t_f} \ell\left(\hat x_\eta \left(\tau\mid\theta_\eta^\star \right), \hat x_\mu \left(\tau\mid\theta_\mu^\star \right) \right)\, d\tau.$$
+If the dataset used for model discovery is insufficient to yield an adequate model, and provided the experimental budget has not been exhausted, we can leverage insights from the optimized models to design a more informative experiment. In particular, we identify the operating conditions that maximize the discrepancy between the state predictions $\hat x(t|\theta^\star)$ of the two best proposed models, denoted as $\eta$ and $\mu$, based on the current dataset. In this work, the "operating conditions" refer to the initial conditions of an experiment. However, the "operating conditions" can be expanded to included many other variables, both static (e.g., initial temperature, initial pressure, type of catalyst) and dynamic (e.g., heating/cooling profile, rate of reactant addition, rate of product extraction).
 
-In the above equation, $\ell$ represents the RSS. Starting from the proposed initial condition, an experiment can be carried out to obtain a new batch of data points to be added to the original data set. Finally, the whole process of model proposal and selection can be redone with the enhanced data set, closing the loop between informative experiments and optimal models.
 
+The rationale for selecting these two models is discussed in our previous paper. The MBDoE approach adopted in this work follows the framework developed by Hunter and Reiner:
+
+$$x_0^{(new)} = \argmax_{x_0} \left\{ x_0 + \int_{t_0}^{t_f} \ell\left(\hat x_\eta \left(\tau\mid\theta_\eta^\star \right), \hat x_\mu \left(\tau\mid\theta_\mu^\star \right) \right)\, d\tau \right\}.$$
+
+In the above equation, $\ell$ represents the SSE. Once the optimal initial conditions are determined, a new experiment can be performed to generate additional data points, which are then incorporated into the original dataset. With this enriched dataset, PI-ADoK can be executed again, thereby closing the loop between informative experimental design and optimal model discovery.
+
+
+### Integration of Mathematical Constraints
+
+The incorporation of mathematical constraints into symbolic regression frameworks has attracted considerable attention in the literature, yielding mixed outcomes. On one hand, studies such as those by Kronberger (2022) indicate that integrating constraints may lead to higher prediction errors on both training and testing datasets. They attribute this effect to slower convergence rates and a more rapid loss of genetic diversity. Nevertheless, this same study suggest that under elevated noise levels (which often mirror the inherent variability in experimental setups) the benefits of enforcing constraints become more pronounced by steering the search toward models that are consistent with the underlying system.
+
+Further investigations by Haider (2023) extended these observations by examining case studies under conditions of high noise. Their findings indicate that, although the improvements in prediction error were sometimes not statistically significant compared to unconstrained approaches, the incorporation of constraints did help in identifying models with a lower propensity for overfitting and enhanced adherence to expected behavior. In addition, research by Błądek (2019) demonstrates that for smaller datasets (typical of many experimental scenarios) the integration of mathematical constraints can yield statistically significant improvements over traditional genetic programming (GP) algorithms without constraints.
+
+Taken together, these studies, despite their ambiguous outcomes, are encouraging for our application area (of course, this is contingent on having a good underlying discovery algorithm, because without it, constraints will likely provide little added-value). Experimental data are frequently characterized by high noise levels and limited sample sizes, conditions under which the selective enforcement of constraints appears to offer tangible benefits. This suggests that, even if the addition of constraints occasionally incurs a trade-off in prediction accuracy, the overall improvements in physical plausibility and model robustness make this approach a promising avenue for experimental applications like the one we deal with in this work.
+
+Motivated by these findings there is a clear need for a flexible methodology to incorporate extensive prior knowledge (often available in kinetic studies) into GP. PI-ADoK integrates constraints directly into the GP process to ensure that candidate models not only fit the data but also conform to established physical laws.
+
+Integrating constraints into GP is a delicate endeavor that requires balancing exploration and exploitation in a vast search space. On one hand, constraints reduce the search space by eliminating models that violate known physical principles, thus focusing computational effort on promising regions. On the other hand, overly stringent constraints lead to reduced population diversity, which can induce premature convergence, and inevitably results in suboptimal solutions.
+
+In PI-ADoK, constraints are incorporated in a straightforward yet effective manner. Each candidate model is evaluated based on its prediction error and its compliance with a set of predefined constraints. Specifically, our constraints verify that candidate models:
+
+1. Exactly respect the initial conditions (since these are determined with minimal uncertainty).
+2. Reach equilibrium so that the function's end behavior converges to a constant value.
+3. Consistently predict outputs with the correct sign (e.g., positive concentrations or negative rates).
+4. Exhibit the correct monotonic behavior, being either always increasing or always decreasing.
+
+Each of these constraints can be turned on and off independently based on the chemical system being investigated. When a candidate model satisfies all constraints, its fitness is determined solely by its prediction error. However, if it violates one or more constraints, a penalty, which is proportional to the degree of violation and scaled by a user-defined hyperparameter, is added to its fitness. This penalty-based method enables fine-tuning of the balance between allowing some flexibility in the search and enforcing strict constraint adherence through the hyperparameters. It is important to note that these hyperparameters were manually fine-tuned for our experiments. Although a more formal hyperparameter optimization could potentially enhance the robustness of our findings, we believe that these parameters should be tuned on a case-by-case basis, since the appropriate confidence in the constraints depends on the specific system, the amount of available information, and ultimately the performance of the algorithm.
+
+This approach offers several advantages:
+
+- It preserves the interpretability and physical plausibility of the resulting models by ensuring adherence to known physical laws.
+- It focuses the search on promising regions of the model space, potentially reducing the experimental cost of model discovery.
+- The use of hyperparameters to scale penalty terms allows the algorithm to be tailored to different problem contexts, balancing the need for exploration with the drive for exploitation.
+
+However, it is important to note that our current implementation employs static hyperparameters that remain constant throughout the search process. In future work, it would be worthwhile to investigate dynamic hyperparameter tuning strategies, where the penalty factors evolve during the search. For instance, one might hypothesize that a more relaxed constraint regime in the early stages could maximize diversity and facilitate a broad exploration of the model space. As the search progresses and promising regions are identified, the constraints could gradually become more stringent, thereby focusing computational resources on refining high-performing solutions.
+
+
+### Uncertainty Quantification Using the Metropolis-Hastings Algorithm
+
+Uncertainty quantification is an important aspect of modeling complex kinetic systems, as it provides insight into the confidence and robustness of predicted model behavior. In the context of symbolic regression, and specifically for PI-ADoK, the need to accurately propagate uncertainty through non-linear, high-dimensional kinetic models have led us to adopt a sampling-based approach using the Metropolis-Hastings (MH) algorithm.
+
+Various methods exist for uncertainty quantification, ranging from simpler techniques such as Laplace approximations and sigma points to more sophisticated sampling algorithms like Hamiltonian Monte Carlo (HMC) and MH. For our purposes of kinetic modeling, where accuracy may be critical, the MH algorithm was selected because of its ability to handle complex, non-linear distributions whilst having a simple and intuitive implementation that provides effective results. This flexibility in choosing proposal distributions makes MH particularly adaptable to the intricate dynamics often encountered in kinetic modeling.
+
+The MH algorithm is an iterative method designed to sample from a target distribution: in our case, the posterior distribution of the model parameters. It works by constructing a Markov chain, meaning that each new sample depends only on the current state, and as the chain evolves, its distribution converges to the target distribution (this convergence is known as the chain reaching its stationary distribution).
+
+At each iteration, a candidate point is generated by perturbing the current point using a proposal distribution. The candidate is then either accepted or rejected based on an acceptance probability. This probability is calculated to satisfy the detailed balance condition, which essentially ensures that the likelihood of moving from one point to another and vice versa is balanced in such a way that the chain will eventually reflect the target distribution.
+
+In our implementation, if the candidate improves the model's fit (i.e., it has a higher posterior probability) or meets the acceptance criterion probabilistically even when it is less likely than the current state, the candidate is accepted and becomes the new current state. If not, the algorithm retains the current state. This process of generating, evaluating, and either accepting or rejecting candidates allows the chain to explore the parameter space effectively. Over many iterations, the samples collected approximate the posterior distribution, providing a robust quantification of uncertainty in our kinetic models.
+
+The main steps of the MH algorithm are summarized in the algorithm below.
+
+![Alt text](MH_algorithm.png)
 
 </details>
 
@@ -106,8 +156,8 @@ In the above equation, $\ell$ represents the RSS. Starting from the proposed ini
 <details>
 <summary>Click to expand</summary>
 
-### Tutorial for ADoK-S: Hydrodealkylation of Toluene
-The code presented below serves to give step-by-step instructions on how to execute ADoK-S. Near identical script can be found in the `sym_reg_models.py` file within the Hydrodealkylation of Toluene file within the ADoK-S file in this repository. Similar scripts can be found for the other case studies in their respective files.
+### Tutorial for PI-ADoK: Decomposition of Nitrous Oxide
+The code presented below serves to give step-by-step instructions on how to execute PI-ADoK. 
 
 #### Import required packages
 Below we show the needed packages to be used in the rest of the example.
@@ -124,147 +174,217 @@ from pysr import PySRRegressor
 from sympy import *
 from scipy.misc import derivative as der
 import re
+from scipy.integrate import solve_ivp
 import itertools as it 
 from time import perf_counter
-from scipy.optimize import minimize
+import matplotlib.cm as cm
+import os
 ```
 
 </details>
 
 #### Data Generation
-Here, we will be working with the hydrodealkylation of toluene as a case study. The first thing that we must do is generate some data (if experimental data is not available - if it is, it should be formatted in the same way it is presented above).
+Here, we will be working with the decomposition of nitrous oxide as a case study. The first thing that we must do is generate some data, if experimental data is not available (if it is, it should be formatted in the same way it is presented above).
 
 <details>
 <summary>Show code</summary>
 
 ```python
 def kinetic_model(t, z):
-    # Define rate constants for the kinetic model
     k_1 = 2 
-    k_2 = 9 
-    k_3 = 5
+    k_2 = 5
 
-    # Define the differential equations for the kinetic model
-    dTdt = (-1) * ((k_1 * z[1] * z[0]) / (1 + k_2 * z[2] + k_3 * z[0]))
-    dHdt = (-1) * ((k_1 * z[1] * z[0]) / (1 + k_2 * z[2] + k_3 * z[0]))
-    dBdt = ((k_1 * z[1] * z[0]) / (1 + k_2 * z[2] + k_3 * z[0]))
-    dMdt = ((k_1 * z[1] * z[0]) / (1 + k_2 * z[2] + k_3 * z[0]))
+    dNOdt = (-1) * ((k_1 * z[0]**2) / (1 + k_2 * z[0]))
+    dNdt = ((k_1 * z[0]**2) / (1 + k_2 * z[0]))
+    dOdt = (1/2) * ((k_1 * z[0]**2) / (1 + k_2 * z[0]))
 
-    # Return the derivatives as a list
-    dzdt = [dTdt, dHdt, dBdt, dMdt]
+    dzdt = [dNOdt, dNdt, dOdt]
     return dzdt
 
-# List of species involved in the kinetic model
-species = ['T', 'H', 'B', 'M']
-
-# Define initial conditions for each experiment
+# Plotting the data given
+species = ["NO", "N", "O"]
 initial_conditions = {
-    "ic_1": np.array([1, 8, 2, 3]),
-    "ic_2": np.array([5, 8, 0, 0.5]),
-    "ic_3": np.array([5, 3, 0, 0.5]),
-    "ic_4": np.array([1, 3, 0, 3]),
-    "ic_5": np.array([1, 8, 2, 0.5])
+    "ic_1": np.array([5 , 0, 0]),
+    "ic_2": np.array([10, 0, 0]),
+    "ic_3": np.array([5 , 2, 0]),
+    "ic_4": np.array([5 , 0, 3]),
+    "ic_5": np.array([0 , 2, 3]),
 }
 
-# Calculate the number of experiments and species
 num_exp = len(initial_conditions)
 num_species = len(species)
 
-# Define time parameters for the simulation
-timesteps = 30
+timesteps = 15
 time = np.linspace(0, 10, timesteps)
 t = [0, np.max(time)]
 t_eval = list(time)
-
-# Define standard deviation for noise
 STD = 0.2
-
-# Generate synthetic noise for each experiment
 noise = [np.random.normal(0, STD, size = (num_species, timesteps)) for i in range(num_exp)]
-
-# Dictionaries to store simulated data
 in_silico_data = {}
 no_noise_data = {}
 
-# Simulate each experiment and add noise to the data
 for i in range(num_exp):
     ic = initial_conditions["ic_" + str(i + 1)]
     solution = solve_ivp(kinetic_model, t, ic, t_eval = t_eval, method = "RK45")
     in_silico_data["exp_" + str(i + 1)] = np.clip(solution.y + noise[i], 0, 1e99)
     no_noise_data["exp_" + str(i + 1)] = solution.y
 
+color_1 = ['salmon', 'royalblue', 'darkviolet']
+marker = ['o', 'o', 'o', 'o']
+
 # Plotting the in-silico data for visualisation
 for i in range(num_exp):
     fig, ax = plt.subplots()
     ax.set_title("Experiment " + str(i + 1))
-    ax.set_ylabel("Concentrations $(M)$", fontsize = 18)
-    ax.set_xlabel("Time $(h)$", fontsize = 18)
+    ax.set_ylabel("Concentration $(M)$")
+    ax.set_xlabel("Time $(h)$")
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
-    ax.tick_params(axis = 'both', which = 'major', labelsize = 18)
-    
+
     for j in range(num_species):
         y = in_silico_data["exp_" + str(i + 1)][j]
-        ax.plot(time, y, marker[j], markersize = 4, label = species[j], color = color_1[j])
-    
-    ax.grid(alpha = 0.5)
-    ax.legend(loc='upper right', fontsize = 15)
+        ax.plot(time, y, marker[j], markersize = 3, label = species[j], color = color_1[j])
 
-plt.show()
+    ax.grid(alpha = 0.5)
+    ax.legend()
+        
+# plt.show()
+
+
+def save_matrix_as_csv(matrix, filename):
+    # Convert numpy matrix to pandas dataframe
+    df = pd.DataFrame(matrix)
+        
+    # Save dataframe as CSV file in exp_data directory without index
+    filepath = os.path.join("Physics_Informed_Symbolic_Regression/physics_informed_SR/Decomposition_Nitrous_Oxide/exp_data", filename + ".csv")
+    df.to_csv(filepath, index = False, header = False)
+
+for i in range(num_exp):
+    name = "exp_" + str(i + 1)
+    matrix = in_silico_data[name]
+    save_matrix_as_csv(matrix, name)
 ```
 
 </details>
 
 #### Generating Concentration Models
-Once we have generated the concentration versus time dataset, we must now create concentration profiles so we can then numerically differentiate them and approximate the rates of reaction (which cannot be measured experimentally). The inputs for the genetic programming algorithm can be changed in accordance to one's problems. This snippet of code will generate files with the equations 
+Once we have generated the concentration versus time dataset, we must now create concentration profiles so we can then numerically differentiate them and approximate the rates of reaction (which cannot be measured experimentally). The inputs for the genetic programming algorithm can be changed in accordance to one's problems. This snippet of code will generate files with the equations. 
 
 <details>
 <summary>Show code</summary>
 
-```python
+```julia
 # Loop through each experiment and species to perform symbolic regression
-for i in range(num_exp):
-    for j in range(num_species):
-        successful = False  # Flag to indicate successful completion
 
-        # Repeat until successful
-        while successful is False:
-            try:
-                # Selecting file names based on species for saving results
-                if j == 0:
-                    file_name = str("hall_of_fame_T_" + str(i + 1) + ".csv")
-                elif j == 1:
-                    file_name = str("hall_of_fame_H_" + str(i + 1) + ".csv")
-                elif j == 2:
-                    file_name = str("hall_of_fame_B_" + str(i + 1) + ".csv")
-                elif j == 3:
-                    file_name = str("hall_of_fame_M_" + str(i + 1) + ".csv")
+import Pkg
+# Here, we are loading our physics-informed version of the symbolic regression package 
+# All of the path names need to be adjusted to the specific implementation
+project_dir = "/Users/md1621/Desktop/PhD-Code/Physics_Informed_Symbolic_Regression/physics_informed_SR"
+Pkg.activate(project_dir)
+Pkg.instantiate()
 
-                # Preparing time (X) and concentration (Y) data for regression
-                X = time.reshape(-1, 1)
-                Y = in_silico_data["exp_" + str(i + 1)][j].reshape(-1, 1)
 
-                # Setting up the symbolic regression model with specified parameters
-                model = PySRRegressor(
-                    niterations=200,
-                    binary_operators=["+", "*", "/", "-"],
-                    unary_operators=["exp"],
-                    model_selection="accuracy",
-                    loss="loss(x, y) = (x - y)^2",
-                    maxsize=9,
-                    timeout_in_seconds=300,
-                    parsimony=1e-5,
-                    equation_file=file_name
-                )
+exp_dir = "Physics_Informed_Symbolic_Regression/physics_informed_SR/Decomposition_Nitrous_Oxide/exp_data"
+hof_dir = "Physics_Informed_Symbolic_Regression/physics_informed_SR/Decomposition_Nitrous_Oxide/hof_files"
+rate_dir = "Physics_Informed_Symbolic_Regression/physics_informed_SR/Decomposition_Nitrous_Oxide/const_data"
 
-                # Fitting the model to the data
-                model.fit(X, Y, variable_names=["t"])
+using IterTools: ncycle
+using SymbolicRegression
+using Infiltrator
+using DelimitedFiles
 
-                # Mark as successful to exit the while loop
-                successful = True
-            except:
-                # If an exception occurs, the loop continues
-                pass
+tspan = (0e0, 1e1)
+num_timepoints = 15
+
+times_per_dataset=collect(range(tspan[begin], tspan[end]; length=num_timepoints))
+
+ini_NO = [5e0, 1e1, 5e0, 5e0, 1e1]
+ini_N = [0e0, 0e0, 2e0, 0e0, 2e0]
+ini_O = [0e0, 0e0, 0e0, 3e0, 3e0]
+
+num_datasets = length(ini_NO)
+num_states = 3
+
+function my_loss(tree, dataset::Dataset{T,L}, options)::L where {T,L}
+    prediction, flag = eval_tree_array(tree, dataset.X, options)
+    if !flag
+        return L(Inf)
+    end
+    return sum((prediction .- dataset.y) .^ 2)
+end
+
+
+# Here we loop through each species and each experiment, adding sensible constraints for each of the profiles.
+for i in num_datasets:num_datasets
+    datasets = readdlm(exp_dir*"/exp_$i.csv", ',', Float64, '\n')
+    #------------------------------#
+
+    for j in 1:num_states
+        X = reshape(times_per_dataset, 1, :)
+        y = reshape(datasets[j, :], 1, :)
+
+        if j == 1
+            name = hof_dir*"/hall_of_fame_NO$i.csv"
+            options = Options(; # NOTE add new constraint here
+                binary_operators=[+, *, /, -],
+                unary_operators=[exp],
+                loss_function=my_loss,
+                maxsize=9,
+                parsimony=0.00001,
+                timeout_in_seconds=300,
+                constraint_initial_condition=true,
+                constraint_concentration_equilibrium=true,
+                constraint_always_positive=true,
+                constraint_always_negative=false,
+                constraint_always_increasing=false,
+                constraint_always_decreasing=true,
+                hofFile=name
+            )
+
+        elseif j == 2
+            name =  hof_dir*"/hall_of_fame_N$i.csv"
+            options = Options(; # NOTE add new constraint here
+            binary_operators=[+, *, /, -],
+            unary_operators=[exp],
+            loss_function=my_loss,
+            maxsize=9,
+            parsimony=0.00001,
+            timeout_in_seconds=300,
+            constraint_initial_condition=true,
+            constraint_concentration_equilibrium=true,
+            constraint_always_positive=true,
+            constraint_always_negative=false,
+            constraint_always_increasing=true,
+            constraint_always_decreasing=false,
+            hofFile=name
+        )
+
+        elseif j == 3
+            name =  hof_dir*"/hall_of_fame_O$i.csv"
+            options = Options(; # NOTE add new constraint here
+            binary_operators=[+, *, /, -],
+            unary_operators=[exp],
+            loss_function=my_loss,
+            maxsize=9,
+            parsimony=0.00001,
+            timeout_in_seconds=300,
+            constraint_initial_condition=true,
+            constraint_concentration_equilibrium=true,
+            constraint_always_positive=true,
+            constraint_always_negative=false,
+            constraint_always_increasing=true,
+            constraint_always_decreasing=false,
+            hofFile=name
+        )
+
+        end
+
+        hall_of_fame = equation_search(
+            X, y, niterations=200, options=options, parallelism=:serial, variable_names=["t"]
+        )
+    end
+end
+
 ```
 
 </details>
@@ -277,134 +397,134 @@ Once the concentration models have been produced, we will read them from the fil
 
 ```python
 def read_equations(path):
-    # Reads equations from a CSV file
+    # Read equations from CSV with different separator 
     data = pd.read_csv(path)
-    # Retrieves the "Equation" column as a numpy array
+    # Convert dataframe into numpy array
     eqs = data["Equation"].values
     
     eq_list = []
-    
+    # For every string equation in list...
+        
     def make_f(eq):
-        # Converts a string equation into a function
+        # Function takes a string equation, 
+        # Converts exp to numpy representation
+        # And returns the expression of that string 
+        # As a function 
         def f(t):
-            # Replace the variable in the equation with 't' and convert 'exp' to its numpy equivalent
             equation = eq.replace("x0", "t")
             return eval(equation.replace("exp", "np.exp"))
         return f
     
     for eq in eqs:
-        # Convert each equation in the list into a function and add it to eq_list
+        # Iterate over expression strings and make functions
+        # Then add to expression list
         eq_list += [make_f(eq)]
-    
+        
     return eq_list
 
 def number_param(path):
-    # Reads equations from a CSV file
+    # Read equations from CSV with different separator 
     data = pd.read_csv(path)
+    # Convert dataframe into numpy array
     eqs = data["Equation"].values
     t = symbols("t")
     simple_traj = []
     param = []
-    
+
     for eq in eqs:
-        # Simplifies each equation and counts the number of parameters
         func = simplify(eq)
         simple_traj.append(func)
         things = list(func.atoms(Float))
         param.append(len(things))
-    
+
     simple_traj = np.array(simple_traj).tolist()
     return param
 
 def find_best_model(NLL, param):
-    # Calculates the AIC for each model and identifies the one with the lowest AIC
+    # Finding the model with the lowest AIC value
     AIC = 2 * np.array(NLL) + 2 * np.array(param)
     index = np.where(AIC == np.min(AIC))
     return index[0][0]
 
 def NLL_models(eq_list, t, data, NLL_species, number_datapoints):
-    # Computes the Negative Log-Likelihood for each model
+    # Make list of NLL values for each equation
     NLL = []
-    
+
     for f in eq_list:
         y_T = []
-        
+
         for a in t:
             y_T.append(f(a))
-        
+
         NLL.append(NLL_species(data, y_T, number_datapoints))
     return NLL
 
 def NLL(C, y_C, number_datapoints):
-    # Calculates the Negative Log-Likelihood for a given set of data points
+    # Calculate the NLL value of a given equation
     likelihood = np.empty(number_datapoints)
     mse = np.empty(number_datapoints)
-    
+
     for i in range(number_datapoints):
         mse[i] = ((C[i] - y_C[i])**2)
-    
+
     variance = np.sum(mse) / number_datapoints
-    
+
     for i in range(number_datapoints):
-        likelihood[i] = ((C[i] - y_C[i])**2) / (2 * variance) - np.log(1 / (np.sqrt(2 * np.pi * variance)))
-    
+        likelihood[i] = ((C[i] - y_C[i])**2) / (2 * (variance)) \
+            - np.log(1 / (np.sqrt(2 * np.pi * (variance))))
+
     return np.sum(likelihood)
 
-# Identifying the best concentration models for each experiment
+# Find out which concentration models are best for each experiment
 equation_lists = {}
 best_models = {}
 
 for i in range(num_exp):
     data = in_silico_data["exp_" + str(i + 1)]
-    
+
     for j in range(num_species):
-        # Determine the file name based on the species and experiment number
-        # Read equations, calculate NLL, and find the best model
-        # File naming follows a specific pattern based on species and experiment number
-        # The best model is identified for each species in each experiment
-
         if j == 0:
-            file_name = str("hall_of_fame_T_" + str(i + 1) + ".csv")
-            name = "T_"
+            file_name = str("Physics_Informed_Symbolic_Regression/physics_informed_SR/Decomposition_Nitrous_Oxide/hof_files/hall_of_fame_NO" \
+                + str(i + 1) + ".csv")
+            name = "NO_"
         if j == 1:
-            file_name = str("hall_of_fame_H_" + str(i + 1) + ".csv")
-            name = "H_"
+            file_name = str("Physics_Informed_Symbolic_Regression/physics_informed_SR/Decomposition_Nitrous_Oxide/hof_files/hall_of_fame_N" \
+                + str(i + 1) + ".csv")
+            name = "N_"
         if j == 2:
-            file_name = str("hall_of_fame_B_" + str(i + 1) + ".csv")
-            name = "B_"
-        if j == 3:
-            file_name = str("hall_of_fame_M_" + str(i + 1) + ".csv")
-            name = "M_"
-
-        # Read equations, calculate NLL values, and find the best model
+            file_name = str("Physics_Informed_Symbolic_Regression/physics_informed_SR/Decomposition_Nitrous_Oxide/hof_files/hall_of_fame_O" \
+                + str(i + 1) + ".csv")
+            name = "O_"
+        
         a = read_equations(file_name)
         nll_a = NLL_models(a, time, data[j], NLL, timesteps)
         param_a = number_param(file_name)
         best_models[name + str(i + 1)] = find_best_model(nll_a, param_a)
         equation_lists[name + str(i + 1)] = a
 
-# Plotting the concentration profiles and in-silico data for each experiment
+# Plotting the selected concentration profile and in-silico data
 for i in range(num_exp):
     fig, ax = plt.subplots()
-    ax.set_ylabel("Concentrations $(M)$", fontsize=18)
-    ax.set_xlabel("Time $(h)$", fontsize=18)
+    # ax.set_title("Concentration Profiles - Experiment " + str(i + 1))
+    ax.set_ylabel("Concentrations $(M)$", fontsize = 18)
+    ax.set_xlabel("Time $(h)$", fontsize = 18)
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
-    ax.tick_params(axis='both', which='major', labelsize=18)
-    
+    ax.tick_params(axis = 'both', which = 'major', labelsize = 18)
+
     for j in range(num_species):
-        # Plot the actual data and the model predictions for each species
         y = in_silico_data["exp_" + str(i + 1)][j]
         name = species[j] + "_" + str(i + 1)
         model = best_models[name]
         yy = equation_lists[name][model](time)
-        ax.plot(time, y, marker[j], markersize=4, label=species[j], color=color_1[j])
-        ax.plot(time, yy, color=color_1[j], linestyle="-")
-    
-    ax.grid(alpha=0.5)
-    ax.legend(loc='upper right', fontsize=15)
-    
-plt.show()
+        ax.plot(time, y, marker[j], markersize = 4, label = species[j], color = color_1[j])
+        ax.plot(time, yy, color = color_1[j], linestyle = "-")
+
+    ax.grid(alpha = 0.5)
+    ax.legend(fontsize = 15)
+
+
+# plt.show()
 ```
 
 </details>
@@ -502,117 +622,160 @@ Now that we have figured out which concentration models minimize the AIC (and we
 
 ```python
 derivatives = {}
-SR_derivatives_T = np.array([])
-SR_derivatives_H = np.array([])
-SR_derivatives_B = np.array([])
-SR_derivatives_M = np.array([])
+SR_derivatives_NO = np.array([])
+SR_derivatives_N  = np.array([])
+SR_derivatives_O  = np.array([])
 
-# Calculate and store derivatives of concentration models for each experiment and species
+# Getting the rate measurements from the model (realistically, never available)
+# But just to check the fit of our estimates of the rate which are obtained by
+# Numerically differentiating the concentration models selected
 for i in range(num_exp):
+    
     for j in range(num_species):
         name = species[j] + "_" + str(i + 1)
         model = best_models[name]
         best_model = equation_lists[name][model]
         derivative = np.zeros(timesteps)
         
-        # Numerically differentiate the best model for each time step
         for h in range(timesteps):
-            derivative[h] = der(best_model, time[h], dx=1e-6)
+            derivative[h] =  der(best_model, time[h], dx = 1e-6)
         
-        # Store the derivative in a dictionary
         derivatives[name] = derivative
 
-# Plotting the estimated and actual rates for each experiment
+# Plotting the estimated rates and the actual rates
 for i in range(num_exp):
     fig, ax = plt.subplots()
-    ax.set_ylabel("Rate $(Mh^{-1})$", fontsize=18)
-    ax.set_xlabel("Time $(h)$", fontsize=18)
+    # ax.set_title("Derivative Estimates - Experiment " + str(i + 1))
+    ax.set_ylabel("Rate $(Mh^{-1})$", fontsize = 18)
+    ax.set_xlabel("Time $(h)$", fontsize = 18)
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
     data = no_noise_data["exp_" + str(i + 1)]
     y = kinetic_model(time, data)
-    ax.tick_params(axis='both', which='major', labelsize=18)
-    
+    ax.tick_params(axis = 'both', which = 'major', labelsize = 18)
+
     for j in range(num_species):
         name = species[j] + "_" + str(i + 1)
         yy = derivatives[name]
-        # Plot actual and estimated rates
-        ax.plot(time, y[j], marker[j], markersize=4, label=species[j], color=color_1[j])
-        ax.plot(time, yy, color=color_1[j], linestyle="-")
-    
-    ax.grid(alpha=0.5)
-    ax.legend(loc='upper right', fontsize=15)
-plt.show()
+        ax.plot(time, y[j], marker[j], markersize = 4, label = species[j], color = color_1[j])
+        ax.plot(time, yy, color = color_1[j], linestyle = "-")
 
-# Concatenate derivatives for all experiments for each species
-# to prepare for the second step of the symbolic regression methodology
+    ax.grid(alpha = 0.5)
+    ax.legend(fontsize = 15)
+
+# plt.show()
+
+# Preparing the data for the second step of the symbolic regression methodology
 for i in range(num_exp):
-    SR_derivatives_T = np.concatenate([SR_derivatives_T, derivatives["T_" + str(i + 1)]])
-    SR_derivatives_H = np.concatenate([SR_derivatives_H, derivatives["H_" + str(i + 1)]])
-    SR_derivatives_B = np.concatenate([SR_derivatives_B, derivatives["B_" + str(i + 1)]])
-    SR_derivatives_M = np.concatenate([SR_derivatives_M, derivatives["M_" + str(i + 1)]])
+    SR_derivatives_NO = np.concatenate([SR_derivatives_NO, derivatives["NO_" + str(i + 1)]])
+    SR_derivatives_N  = np.concatenate([SR_derivatives_N , derivatives["N_"  + str(i + 1)]])
+    SR_derivatives_O  = np.concatenate([SR_derivatives_O , derivatives["O_"  + str(i + 1)]])
 
-# Stacking data from different experiments for symbolic regression analysis
 a = in_silico_data["exp_1"].T
 b = in_silico_data["exp_2"].T
-SR_data = np.vstack((a, b))
+sr_data = np.vstack((a, b))
+
+for i in range(2, num_exp):
+    c = in_silico_data["exp_" + str(i + 1)].T
+    sr_data = np.vstack((sr_data, c))
+    
+def save_matrix_as_csv(matrix, filename):
+    # Convert numpy matrix to pandas dataframe
+    df = pd.DataFrame(matrix)
+        
+    # Save dataframe as CSV file in exp_data directory without index
+    filepath = os.path.join("Physics_Informed_Symbolic_Regression/physics_informed_SR/Decomposition_Nitrous_Oxide/const_data", filename + ".csv")
+    df.to_csv(filepath, index = False, header = False)
+
+size = len(SR_derivatives_NO)
+save_matrix_as_csv(sr_data[:, 0:3].T, 'conc_data_for_rate_models')
+save_matrix_as_csv(np.reshape(SR_derivatives_NO, (1, size)), 'rate_data_NO')
+save_matrix_as_csv(np.reshape(SR_derivatives_N, (1, size)), 'rate_data_N')
+save_matrix_as_csv(np.reshape(SR_derivatives_O, (1, size)), 'rate_data_O')
 ```
 
 </details>
 
 #### Generate Rate Models
-So far we have: (i) generated some kinetic data; (ii) using the kinetic data, construct concentration models for each species in each experiment; (iii) based on the constructed concentration models, we selected the best one based on AIC; (iv) from the best concentration model, we numerically differentiate it to approximate the rate of consumption and generation of the species. Now, with the approximations, we can use them to make rate models and again select the best rate model from the generated files. Below, using the genetic programming package, we make the rate models and save them as csv files (in the process, a bkup and a pickle file will be generated in the same directory, but these will not be used at all).
+So far we have: (i) generated some kinetic data; (ii) using the kinetic data, construct concentration models for each species in each experiment; (iii) based on the constructed concentration models, we selected the best one based on AIC; (iv) from the best concentration model, we numerically differentiate it to approximate the rate of consumption and generation of the species. Now, with the approximations, we can use them to make rate models and again select the best rate model from the generated files. Below, using the adapted genetic programming package, we make the rate models and save them as csv files (in the process, a bkup and a pickle file will be generated in the same directory, but these will not be used at all).
 
 <details>
 <summary>Show code</summary>
 
-```python
+```julia
 # Loop over each species to perform symbolic regression for rate models
-for i in range(num_species):
-    successful = False  # Flag to indicate successful completion of symbolic regression
+conc_data = readdlm(rate_dir*"/conc_data_for_rate_models.csv", ',', Float64, '\n')
 
-    # Repeat until successful
-    while is successful False:
-        try:
-            # Selecting file names and corresponding derivative data based on species
-            if i == 0:
-                file_name = "hall_of_fame_rate_T.csv"
-                Y = SR_derivatives_T
-                num = 2000  # Number of iterations for the regression algorithm
-            if i == 1:
-                file_name = "hall_of_fame_rate_H.csv"
-                Y = SR_derivatives_H
-                num = 2000
-            if i == 2:
-                file_name = "hall_of_fame_rate_B.csv"
-                Y = SR_derivatives_B
-                num = 2000
-            if i == 3:
-                file_name = "hall_of_fame_rate_M.csv"
-                Y = SR_derivatives_M
-                num = 2000
+for j in 1:num_states
+    X = reshape(conc_data[1,:], num_states - 2, :)
+    i = num_datasets
 
-            # Setting up the symbolic regression model with specified parameters
-            model = PySRRegressor(
-                niterations=num,
-                binary_operators=["+", "*", "/", "-"],
-                model_selection="accuracy",
-                loss="loss(x, y) = (x - y)^2",
-                maxsize=25,
-                timeout_in_seconds=300,
-                parsimony=1e-5,
-                equation_file=file_name
-            )
+    if j == 1
+        name = hof_dir*"/hall_of_fame_rate_NO$i.csv"
+        a = readdlm(rate_dir*"/rate_data_NO.csv", ',', Float64, '\n')
+        y = reshape(a, 1, :)
+        num = 400
+        options = Options(; # NOTE add new constraint here
+            binary_operators=[+, *, /, -],
+            loss_function=my_loss,
+            maxsize=18,
+            parsimony=0.00001,
+            timeout_in_seconds=600,
+            constraint_initial_condition=false,
+            constraint_concentration_equilibrium=false,
+            constraint_always_positive=false,
+            constraint_always_negative=true,
+            constraint_always_increasing=true,
+            constraint_always_decreasing=false,
+            hofFile=name
+        )
 
-            # Fitting the model to the data
-            # Using concentration data as input variables for the model
-            model.fit(SR_data[:, 0:3].reshape(-1, 3), Y, variable_names=["T", "H", "B"])
+    elseif j == 2
+        name = hof_dir*"/hall_of_fame_rate_N$i.csv"
+        a = readdlm(rate_dir*"/rate_data_N.csv", ',', Float64, '\n')
+        y = reshape(a, 1, :)
+        num = 200
+        options = Options(; # NOTE add new constraint here
+            binary_operators=[+, *, /, -],
+            loss_function=my_loss,
+            maxsize=18,
+            parsimony=0.00001,
+            timeout_in_seconds=600,
+            constraint_initial_condition=false,
+            constraint_concentration_equilibrium=false,
+            constraint_always_positive=true,
+            constraint_always_negative=false,
+            constraint_always_increasing=false,
+            constraint_always_decreasing=true,
+            hofFile=name
+        )
 
-            # Mark as successful to exit the while loop
-            successful = True
-        except:
-            # If an exception occurs, the loop continues
-            pass
+    elseif j == 3
+        name = hof_dir*"/hall_of_fame_rate_O$i.csv"
+        a = readdlm(rate_dir*"/rate_data_O.csv", ',', Float64, '\n')
+        y = reshape(a, 1, :)
+        num = 200
+        options = Options(; # NOTE add new constraint here
+            binary_operators=[+, *, /, -],
+            loss_function=my_loss,
+            maxsize=18,
+            parsimony=0.00001,
+            timeout_in_seconds=600,
+            constraint_initial_condition=false,
+            constraint_concentration_equilibrium=false,
+            constraint_always_positive=true,
+            constraint_always_negative=false,
+            constraint_always_increasing=false,
+            constraint_always_decreasing=true,
+            hofFile=name
+        )
+
+    end
+
+    hall_of_fame = equation_search(
+        X, y, niterations=num, options=options, parallelism=:serial, variable_names=["CNO"]
+    )
+end
 ```
 
 </details>
@@ -625,191 +788,236 @@ Similarly to what was done with the concentration models, we need to evaluate th
 
 ```python
 def rate_n_param(path):
-    # Read equations from a CSV file and extract the number of parameters in each equation
+    # read equations from CSV with different separator 
     data = pd.read_csv(path)
+    # convert dataframe into numpy array
     eqs = data["Equation"].values
-    T, H, B, M = symbols("T H B M")  # Define symbolic variables
-    simple_traj = []  # List to store simplified equations
-    param = []  # List to store the number of parameters for each equation
+    NO, N, O = symbols("NO N O")
+    simple_traj = []
+    param = []
     
     for eq in eqs:
-        func = simplify(eq)  # Simplify the equation
-        func = str(func)  # Convert the simplified equation to a string
+        func = simplify(eq)
+        func = str(func)
         j = 0
-        # Find all numbers and operators in the equation
         things = re.findall(r"(\*{2}|\*{0})(\d+\.?\d*)", func)
         
-        # Count the number of parameters
         for i in range(len(things)):
             if things[i][0] != "**":
                 j += 1
         
-        simple_traj.append(func)  # Add the simplified equation to the list
-        param.append(int(j))  # Add the number of parameters to the list
+        simple_traj.append(func)
+        param.append(int(j))
+    # simple_traj = np.array(simple_traj).tolist()
     
     return simple_traj, param
 
-# Dictionary to store rate models and their parameters
 rate_models = {}
 GP_models = {}
 
-# Loop to read equations and their parameters for each species
 for i in range(num_species):
-    # Define the path and names for storing models and parameters
-    # based on species index
-
     if i == 0:
-        path = "hall_of_fame_rate_T.csv"
-        name_models = "T_models"
-        name_params = "T_params"
+        path = "Physics_Informed_Symbolic_Regression/physics_informed_SR/Decomposition_Nitrous_Oxide/hof_files/hall_of_fame_rate_NO" + str(num_exp) + ".csv"
+        name_models = "NO_models"
+        name_params = "NO_params"
     
     if i == 1:
-        path = "hall_of_fame_rate_H.csv"
-        name_models = "H_models"
-        name_params = "H_params"
+        path = "Physics_Informed_Symbolic_Regression/physics_informed_SR/Decomposition_Nitrous_Oxide/hof_files/hall_of_fame_rate_N" + str(num_exp) + ".csv"
+        name_models = "N_models"
+        name_params = "N_params"
     
     if i == 2:
-        path = "hall_of_fame_rate_B.csv"
-        name_models = "B_models"
-        name_params = "B_params"
+        path = "Physics_Informed_Symbolic_Regression/Decomposition_Nitrous_Oxide/hof_files/hall_of_fame_rate_O" + str(num_exp) + ".csv"
+        name_models = "O_models"
+        name_params = "O_params"
     
-    if i == 3:
-        path = "hall_of_fame_rate_M.csv"
-        name_models = "M_models"
-        name_params = "M_params"
-    
-    # Read equations and their parameters
     a, b = rate_n_param(path)
-    # Store the equations and parameters in the dictionary
     GP_models[name_models, name_params] = a, b
 
-def rate_model(z0, equations, t, t_eval, event):
-    # Function to solve the ODE system given initial conditions, equations, and time steps
-    i = 0
+def NLL_rates(rate_est, rate_pred, number_datapoints, num_exp):
+    mse = (rate_est - rate_pred)**2
+    variance = np.sum(mse) / (number_datapoints * num_exp)
+    likelihood = ((rate_est - rate_pred)**2) / (2 * (variance)) \
+        - np.log(1 / (np.sqrt(2 * np.pi * (variance))))
     
-    # Replace symbols in equations with actual variable names
+    return np.sum(likelihood)
+
+def predicting_rate(equation, z):
+    equation = str(equation)
+    equation = equation.replace("CNO", "z[:, 0]")
+    equation = equation.replace("N", "z[:, 1]")
+    equation = equation.replace("O", "z[:, 2]")
+    rate_pred = eval(equation)
+    
+    return rate_pred
+
+def best_rate_model(NLL, param):
+    AIC = 2 * np.array(NLL) + 2 * np.array(param)
+    index = np.where(AIC == np.min(AIC))
+    
+    return index[0][0]
+
+best_ODEs = {}
+
+for i in range(num_species):
+    if i == 0:
+        equations, parameters = GP_models["NO_models", "NO_params"]
+        rate_est = SR_derivatives_NO
+        name = "NO"
+    
+    if i == 1:
+        equations, parameters = GP_models["N_models", "N_params"]
+        rate_est = SR_derivatives_N
+        name = "N"
+    
+    if i == 2:
+        equations, parameters = GP_models["O_models", "O_params"]
+        rate_est = SR_derivatives_O
+        name = "O"
+        
+    nll = []
+    
+    for equation in equations:
+        rate_pred = predicting_rate(equation, sr_data)
+        a = NLL_rates(rate_est, rate_pred, timesteps, num_exp)
+        nll.append(a)
+    
+    best_ODEs[name] = best_rate_model(nll, parameters)
+
+# Here, we give make a function with a given ODE and we evaluated at a given initial condition
+def rate_model(z0, equations, t, t_eval, event):
+    i = 0
+
     for equation in equations:
         equation = str(equation)
-        equation = equation.replace("T", "z[0]")
-        equation = equation.replace("H", "z[1]")
-        equation = equation.replace("B", "z[2]")
-        equation = equation.replace("M", "z[3]")
+        equation = equation.replace("CNO", "z[0]")
+        equation = equation.replace("CN", "z[1]")
+        equation = equation.replace("CO", "z[2]")
         equations[i] = equation
         i += 1
-    
-    # Define the ODE system
+
     def nest(t, z):
-        dTdt = eval(str(equations[0]))
-        dHdt = eval(str(equations[0]))
-        dBdt = (-1) * eval(str(equations[0]))
-        dMdt = (-1) * eval(str(equations[0]))
-        dzdt = [dTdt, dHdt, dBdt, dMdt]
+        dNOdt = eval(str(equations[0]))
+        dNdt = (-1) * eval(str(equations[0]))
+        dOdt = (-1/2) * eval(str(equations[0]))
+        dzdt = [dNOdt, dNdt, dOdt]
         return dzdt
-    
-    # Solve the ODE system
-    sol = solve_ivp(nest, t, z0, t_eval=t_eval, method="RK45", events=event)  
-    
+
+    sol = solve_ivp(nest, t, z0, t_eval = t_eval, method = "RK45", events = event)  
+
     return sol.y, sol.t, sol.status
 
-# Initializing variables and arrays for storing equations and parameters
 equations = []
-names = ["T_models", "T_params", "H_models", "H_params", "B_models", "B_params", "M_models", "M_params"]
-all_models = []  # To store all models for each species
-params = []  # To store the number of parameters for each model
+names = ["NO_models", "NO_params", "N_models", "N_params", "O_models", "O_params"]
+all_models = []
+params = []
 
-# Create all possible ODEs and count their parameters
 for i in np.arange(0, len(names), 2):
     all_models.append(GP_models[names[i], names[i + 1]][0])
     params.append(GP_models[names[i], names[i + 1]][1])
 
-# Function to calculate the Negative Log-Likelihood (NLL) for a given ODE system
+all_ODEs = list(it.product(*all_models))
+param_ODEs = list(it.product(*params))
+
+number_models = len(all_ODEs)
+AIC_values = np.zeros(number_models)
+
+# Here we evaluate the NLL for a given ODE and experiment
 def NLL_kinetics(experiments, predictions, number_species, number_datapoints):
-    # Initialize arrays for calculations
     output = np.zeros(number_species)
     mse = np.zeros(number_species)
     variance = np.zeros(number_species)
-    
-    # Calculate MSE and variance for each species
+
     for i in range(number_species):
-        mse[i] = np.sum((experiments[i] - predictions[i])**2)
-        variance[i] = mse[i] / number_datapoints
-    
-    # Calculate the NLL for each species
+        a = ((experiments[i] - predictions[i])**2)
+        mse[i] = np.sum(a)
+        variance[i] = mse[i] / (number_datapoints)
+
     for i in range(number_species):
-        likelihood = ((experiments[i] - predictions[i])**2) / (2 * variance[i]) \
-            - np.log(1 / (np.sqrt(2 * np.pi * variance[i])))
+        likelihood = ((experiments[i] - predictions[i])**2) / (2 * (variance[i])) \
+            - np.log(1 / (np.sqrt(2 * np.pi * (variance[i]))))
         output[i] = np.sum(likelihood)
-    
+
     return np.sum(output)
 
-# Event function for solve_ivp to handle timeout
+
+# Part of solve_ivp syntax - to make sure if the ODE takes longer than 2 seconds to solve, a big penalty is assigned
 def my_event(t, y):
     time_out = perf_counter()
-    return 0 if (time_out - time_in) > 5 else 1
+
+    if (time_out - time_in) > 2:
+        return 0
+
+    else:
+        return 1
+
 my_event.terminal = True
 
-all_ODEs = GP_models["H_models", "H_params"][0]
+all_ODEs = GP_models["NO_models", "NO_params"][0]
 number_models = len(all_ODEs)
 all_ODEs = [[x] for x in all_ODEs]
 AIC_values = np.zeros(number_models)
 
-# Evaluate NLL for each ODE model across all experiments
 for i in range(number_models):
     neg_log = 0
     print(i)
-    
+
     for j in range(num_exp):
         t = time
         experiments = in_silico_data["exp_" + str(j + 1)]
         time_in = perf_counter()
         ics = initial_conditions["ic_" + str(j + 1)]
         y, tt, status = rate_model(ics, list(all_ODEs[i]), [0, np.max(t)], list(t), my_event)
-        
-        # Assign a high penalty if the model fails to solve or takes too long
-        if status in [-1, 1]:
+
+        if status == -1:
             neg_log = 1e99
             break
+
+        elif status == 1:
+            neg_log = 1e99
+            break
+
         else:
             neg_log += NLL_kinetics(experiments, y, num_species, timesteps)
-    
-    # Calculate AIC values
-    num_parameters = np.sum(np.array(params[1][i]))
+
+    # num_parameters = np.sum(np.array(param_ODEs[i]))
+    num_parameters = np.sum(np.array(params[0][i]))
     AIC_values[i] = 2 * neg_log + 2 * num_parameters
 
-# Identifying the best model based on AIC values
+# Find the best model and plot it
 best_model_index = np.argmin(AIC_values)
 second_min_index = np.argpartition(AIC_values, 1)[1]
+third_min_index = np.argpartition(AIC_values, 1)[2]
 
-# Plot the best model's predictions against the actual data for each experiment
 for i in range(num_exp):
     t = time
     time_in = perf_counter()
-    ics = initial_conditions["ic_" + str(j + 1)]
+    ics = initial_conditions["ic_" + str(i + 1)]
     yy, tt, _ = rate_model(ics, list(all_ODEs[best_model_index]), [0, np.max(t)], list(t), my_event)
-    
-    # Set up plot
+
     fig, ax = plt.subplots()
-    ax.set_ylabel("Concentrations $(M)$", fontsize=18)
-    ax.set_xlabel("Time $(h)$", fontsize=18)
-    ax.tick_params(axis='both', which='major', labelsize=18)
-    
-    # Plot data for each species
+    # ax.set_title("Experiment " + str(i + 1))
+    ax.set_ylabel("Concentrations $(M)$", fontsize = 18)
+    ax.set_xlabel("Time $(h)$", fontsize = 18)
+    ax.tick_params(axis = 'both', which = 'major', labelsize = 18)
+
     for j in range(num_species):
-        y = in_silico_data["exp_" + str(j + 1)][j]
-        ax.plot(t, y, "o", markersize=4, label=species[j], color=color_1[j])
-        ax.plot(tt, yy[j], color=color_1[j])
-    
-    # Finalize plot
+        y = in_silico_data["exp_" + str(i + 1)][j]
+        ax.plot(t, y, "o", markersize = 4, label = species[j], color = color_1[j])
+        ax.plot(tt, yy[j], color = color_1[j])
+
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
-    ax.grid(alpha=0.5)
-    ax.legend(loc='upper right', fontsize=15)
+    ax.grid(alpha = 0.5)
+    ax.legend(fontsize = 15)
 
-plt.show()
+# plt.show()
 
-# Print the best and second-best model equations
 print(all_ODEs[best_model_index])
 print(all_ODEs[second_min_index])
+print(all_ODEs[third_min_index])
+print(np.argpartition(AIC_values, 1))
+print(AIC_values)
 ```
 
 </details>
@@ -823,20 +1031,19 @@ The parameters of any rate model can be optimized using the following code examp
 ```python
 def competition(k, z0):
     # Define rate constants
-    k_1, k_2, k_3, k_4 = k
+    k_1, k_2 = k
 
     # Nested function defining the system of ODEs
     def nest(t, z):
         # Differential equations for each species in the competition model
-        dTdt = (-1) * ((k_1 * z[1] * z[0]) / (k_2 + k_3 * z[2] + k_4 * z[0]))
-        dHdt = (-1) * ((k_1 * z[1] * z[0]) / (k_2 + k_3 * z[2] + k_4 * z[0]))
-        dBdt = ((k_1 * z[1] * z[0]) / (k_2 + k_3 * z[2] + k_4 * z[0]))
-        dMdt = ((k_1 * z[1] * z[0]) / (k_2 + k_3 * z[2] + k_4 * z[0]))     
-        dzdt = [dTdt, dHdt, dBdt, dMdt]
+        dNOdt = (-1) * ((k_1 * z[0]**2) / (1 + k_2 * z[0]))
+        dNdt = ((k_1 * z[0]**2) / (1 + k_2 * z[0]))
+        dOdt = (1/2) * ((k_1 * z[0]**2) / (1 + k_2 * z[0]))   
+        dzdt = [dNOdt, dNdt, dOdt]
         return dzdt
         
     # Time points for the ODE solution
-    time = np.linspace(0, 10, 30)
+    time = np.linspace(0, 10, 15)
     t = [0, np.max(time)]
     t_eval = list(time)
     
@@ -886,7 +1093,7 @@ def Opt_Rout(multistart, number_parameters, x0, lower_bound, upper_bound, to_opt
 
 # Setting up the optimization parameters
 multistart = 10
-number_parameters = 4
+number_parameters = 2
 lower_bound = 0.0001
 upper_bound = 10
 
@@ -899,248 +1106,107 @@ opt_val, opt_param = Opt_Rout(multistart, number_parameters, solution, lower_bou
 
 # Print the optimization results
 print('MSE = ', opt_val)
-print('Optimal parameters = ', opt_param
+print('Optimal parameters = ', opt_param)
 ```
 
 </details>
 
 #### Model-Based Design of Experiments
-If the user has the experimental budget to run more experiments and the rate model output by the methodology is not satisfactory, they can use the following code to figure out the optimal experiment to discriminate between the two best models output by ADoK-S (within experimental constraints). 
+If the user has the experimental budget to run more experiments and the rate model output by the methodology is not satisfactory, they can use the following code to figure out the optimal experiment to discriminate between the two best models output by PI-ADoK (within experimental constraints). 
 
 <details>
 <summary>Show code</summary>
 
 ```python
 def SR_model(z0, equations, t, t_eval):
-    # Function to solve an ODE system defined by symbolic regression (SR) models.
-    # 'z0' is the initial condition, 'equations' are the model equations, 't' is the time interval,
-    # and 't_eval' are the time points at which to evaluate the solution.
+    i = 0
 
-    for i, equation in enumerate(equations):
-        # Replace species symbols in equations with corresponding state variables.
-        equation = equation.replace("T", "z[0]").replace("H", "z[1]").replace("B", "z[2]").replace("M", "z[3]")
+    for equation in equations:
+        equation = str(equation)
+        equation = equation.replace("CNO", "z[0]")
+        equation = equation.replace("N", "z[1]")
+        equation = equation.replace("H", "z[2]")
         equations[i] = equation
+        i += 1
 
     def nest(t, z):
-        # Nested function to evaluate the ODE system.
-        dTdt = eval(equations[0])
-        dHdt = eval(equations[1])
-        dBdt = (-1) * eval(equations[2])
-        dMdt = (-1) * eval(equations[3])
-        dzdt = [dTdt, dHdt, dBdt, dMdt]
+        dNOdt = (1) * eval(str(equations[0]))
+        dNdt = (-1) * eval(str(equations[0]))
+        dHdt = (-1/2) * eval(str(equations[0]))
+        dzdt = [dNOdt, dNdt, dHdt]
         return dzdt
 
-    # Solve the ODE system using scipy's solve_ivp.
-    sol = solve_ivp(nest, t, z0, t_eval=t_eval, method="RK45")  
+    sol = solve_ivp(nest, t, z0, t_eval = t_eval, method = "RK45")  
+
     return sol.y
 
 def MBDoE(ic, time, sym_model_1, sym_model_2):
-    # Function for Model-Based Design of Experiments (MBDoE).
-    # 'ic' is the initial condition, 'time' is the time points, and 'sym_model_1' and 'sym_model_2' are the models.
-
-    # Solve the ODEs for each model.
+    timesteps = len(time)
     SR_thing_1 = SR_model(ic, sym_model_1, [0, np.max(time)], list(time))
+    SR_thing_1 = SR_thing_1.reshape(len(time), -1)
     SR_thing_2 = SR_model(ic, sym_model_2, [0, np.max(time)], list(time))
-    
-    # Reshape the output and calculate the difference between the two models.
-    difference = -np.sum((SR_thing_1.reshape(len(time), -1) - SR_thing_2.reshape(len(time), -1))**2)
+    SR_thing_2 = SR_thing_2.reshape(len(time), -1)
+    difference = -np.sum((SR_thing_1 - SR_thing_2)**2)
     return difference
 
-def Opt_Rout(multistart, number_parameters, lower_bound, upper_bound, to_opt, time, sym_model_1, sym_model_2):
-    # Function to perform optimization with multiple starting points.
-    # 'multistart' is the number of starting points, and 'number_parameters' is the number of parameters in the model.
-
+def Opt_Rout(multistart, number_parameters, lower_bound, upper_bound, to_opt, \
+    time, sym_model_1, sym_model_2):
     localsol = np.empty([multistart, number_parameters])
     localval = np.empty([multistart, 1])
-    bounds = [(lower_bound[i], upper_bound[i]) for i in range(len(lower_bound))]
+    boundss = tuple([(lower_bound[i], upper_bound[i]) for i in range(len(lower_bound))])
     
     for i in range(multistart):
-        # Generate a random initial condition and perform optimization.
-        x0 = np.random.uniform(lower_bound, upper_bound, size=number_parameters)
-        res = minimize(to_opt, x0, args=(time, sym_model_1, sym_model_2), method='L-BFGS-B', bounds=bounds)
+        x0 = np.random.uniform(lower_bound, upper_bound, size = number_parameters)
+        res = minimize(to_opt, x0, args = (time, sym_model_1, sym_model_2), \
+                        method = 'L-BFGS-B', bounds = boundss)
         localsol[i] = res.x
         localval[i] = res.fun
 
-    # Find the best solution among all starts.
     minindex = np.argmin(localval)
-    return localval[minindex], localsol[minindex]
+    opt_val = localval[minindex]
+    opt_param = localsol[minindex]
+    
+    return opt_val, opt_param
 
-# Setting parameters for the optimization routine.
 multistart = 1
-number_parameters = 4
-lower_bound = np.array([1, 3, 0, 0.5])
-upper_bound = np.array([5, 8, 2, 3])
+number_parameters = 3
+lower_bound = np.array([0 , 0, 0])
+upper_bound = np.array([10, 2, 3])
 to_opt = MBDoE
 timesteps = 15
 time = np.linspace(0, 10, timesteps)
 
-# Define symbolic models.
-sym_model_1 = ['-T/(0.8214542396002273*B + 3.4473477636258578*T/H) + 0.03834845547420483']
-sym_model_2 = ['-H*T/(B*H + 3.514128619371274*T)']
+sym_model_1 = list((
+    '0.013822312359624923 - 0.3736778093978375*CNO',
+))
 
-# Perform optimization to find the best experimental conditions.
-opt_val, opt_param = Opt_Rout(multistart, number_parameters, lower_bound, upper_bound, to_opt, time, sym_model_1, sym_model_2)
-print('Optimal experiment: ', opt_param)
+sym_model_2 = list((
+    '-0.37019046699209807*CNO',
+))
+
+real_model = list((
+    '(-2*CNO**2)/(1+5*CNO)',
+))
+
+a, b = Opt_Rout(multistart, number_parameters, lower_bound, upper_bound, to_opt, \
+    time, sym_model_1, sym_model_2)
+
+print('Optimal experiment: ', b)
 ```
 
-</details>
-
-### Tutorial for ADoK-W
-
-The weak formulation of our approach (ADoK-W) requires a slightly different workflow.
-The main difference being that we use a modification of the `SymbolicRegression.jl` package, to make it possible to integrate numerically the differential equations as defined by symbolic expressions.
-We include the modified library in this repo within the `ADoK-W_SymbolicRegression.jl/` folder for convenience.
-
-> [!NOTE]  
-> The specific modifications to the SymbolicRegression.jl (version 0.12.3) package can be seen here: https://github.com/MilesCranmer/SymbolicRegression.jl/compare/v0.12.3...IlyaOrson:SymbolicRegression.jl:weak_formulation
-
-The dataset format ingestion was modified as well, since this formulation depends on the initial condition of the differential equation.
-The modified version expects the datapoints in an arrangement where each column of the csv file is the evolution of concentration through time of a given species.
-The regression execution needs to run in julia with the local modification of `SymbolicRegression.jl` activated.
-
-In summary, the logical steps are as follow:
-- Generate datapoints in the same way as ADoK-S, but these need to be stored in a csv file where each column is the evolution of concentration through time of a given species.
-- ⁠Generate rate models with ADoK (see code example below)
-- ⁠Estimate the parameters of the models using the same code as in ADoK-S
-- ⁠Select the best model using the same code as ADoK-S
-- If the chosen mode is unsatisfactory, find the optimal discriminatory experiment using same code as adok-s, run the experiment and generate a new dataset. Repeat the process.
-
-The following snippet shows the modified interface to do the regression, including the data generation logic for convenience.
-
-<details>
-<summary>Show code</summary>
-
-```julia
-# activate the modified version of SymbolicRegression.jl included in this repo
-import Pkg
-project_dir = "ADoK-W_SymbolicRegression.jl"
-Pkg.activate(project_dir)
-Pkg.instantiate()
-
-# load the relevant julia packages
-using IterTools: ncycle
-using OrdinaryDiffEq
-using SymbolicRegression
-using DelimitedFiles
-
-# generate the synthetic data
-num_datasets = 5
-num_states = 4
-
-tspan = (0e0, 1e1)
-num_timepoints = 30
-
-times_per_dataset=collect(range(tspan[begin], tspan[end]; length=num_timepoints))
-
-ini_T = [1e0, 5e0, 5e0, 1e0, 1e0]
-ini_H = [8e0, 8e0, 3e0, 3e0, 8e0]
-ini_B = [2e0, 0e0, 0e0, 0e0, 2e0]
-ini_M = [3e0, 5e-1, 5e-1, 3e0, 5e-1]
-
-initial_conditions = [[x0...] for x0 in zip(ini_T, ini_H, ini_B, ini_M)]
-
-scoeff = [-1e0, -1e0, 1e0, 1e0]
-
-function rate(T, H, B, M; k1=2e0, k2=9e0, k3=5e0)
-    num = (k1*H*T)
-    den = (1+k2*B+k3*T)
-    return num / den
-end
-
-function f(u, p, t)
-    T, H, B, M = u
-    r = rate(T, H, B, M)
-    return [stoic * r for stoic in scoeff]
-end
-
-condition(u,t,integrator) = true #any(y -> y < 1f-2, u)
-function affect!(integrator)
-    @show integrator
-    try
-        step!(deepcopy(integrator))
-    catch e
-        @infiltrate
-        throw(e)
-    end
-    return
-end
-dcb = DiscreteCallback(condition, affect!)
-
-function terminate_affect!(integrator)
-    terminate!(integrator)
-end
-function terminate_condition(u,t,integrator)
-    any(y -> y < 0, u)
-end
-ccb = ContinuousCallback(terminate_condition,terminate_affect!)
-
-isoutofdomain(u,p,t) = any(y -> y < 0, u)
-
-function generate_datasets(; noise_per_concentration=nothing)
-    datasets = []
-    for ini in initial_conditions
-        prob = ODEProblem(f, ini, tspan)
-        sol = solve(prob, AutoTsit5(Rosenbrock23()); saveat=times_per_dataset, callback=dcb, isoutofdomain)
-        arr = Array(sol)
-        if isnothing(noise_per_concentration)
-            push!(datasets, Array(sol))
-        else
-            noise_matrix = vcat([noise_level * randn(Float32, (1,length(times_per_dataset))) for noise_level in noise_per_concentration]...)
-            push!(datasets, Array(sol) .+ noise_matrix)
-            # push!(datasets, Array(sol))
-        end
-    end
-    return datasets
-end
-
-
-#------------------------------#
-# GENERATE THE DATASET IN JULIA
-datasets = generate_datasets(; noise_per_concentration=[0.2f0, 0.2f0, 0.2f0, 0.2f0])
-
-# READ THE DATASET FROM PYTHON
-# each experiment is stored in a different csv file
-# each column stores the time evolution of each species
-
-# datasets = [permutedims(readdlm(project_dir*"/data_T2B_$i.csv", '|', Float64, '\n')) for i in 0:num_datasets-1]
-#------------------------------#
-
-# prepare the data for the regression
-X = hcat(datasets...)
-times = ncycle(times_per_dataset, num_datasets) |> collect
-experiments = vcat([fill(Float64(i), num_timepoints) for i in 1:num_datasets]...)
-
-# dummy variable, not really used internally...
-y = X[1,:]
-
-# execute the regression
-options = SymbolicRegression.Options(binary_operators=(+, *, /, -),hofFile="hall_of_fame_T2B.csv",maxsize=25,parsimony=1e-5)
-hall_of_fame = EquationSearch(X, y, niterations=50, options=options, numprocs=8, times=times, experiments=experiments, stoic_coeff=scoeff)
-
-dominating = calculate_pareto_frontier(X, y, hall_of_fame, options)
-
-println("Complexity\tMSE\tEquation")
-
-for member in dominating
-    complexity = compute_complexity(member.tree, options)
-    loss = member.loss
-    string = string_tree(member.tree, options)
-
-    println("$(complexity)\t$(loss)\t$(string)")
-end
-```
 </details>
 
 </details>
 
 ## Citation
 ```tex
-@misc{https://doi.org/10.48550/arxiv.2301.11356,
-  doi = {10.48550/ARXIV.2301.11356},
-  author = {de Carvalho Servia,  Miguel Ángel and Sandoval,  Ilya Orson and Hellgardt,  Klaus and Hii,  King Kuok and Zhang,  Dongda and del Rio Chanona,  Ehecatl Antonio},
-  title = {{The Automated Discovery of Kinetic Rate Models -- Methodological Frameworks}},
+@misc{https://doi.org/10.48550/arxiv.2507.02730,
+  doi = {10.48550/ARXIV.2507.02730},
+  author = {Servia,  Miguel Ángel de Carvalho and Sandoval,  Ilya Orson and Kuok,  King and {Hii} and Hellgardt,  Klaus and Zhang,  Dongda and Chanona,  Ehecatl Antonio del Rio},
+  title = {Constraint-Guided Symbolic Regression for Data-Efficient Kinetic Model Discovery},
   publisher = {arXiv},
-  year = {2023},
+  year = {2025},
   copyright = {Creative Commons Attribution Non Commercial No Derivatives 4.0 International}
 }
 ```
+
