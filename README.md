@@ -21,7 +21,9 @@ In our framework, variables are represented as state vectors $x \in \mathbb{R}^{
 
 A symbolic model $m \in \mathcal{M}$ is characterized by a finite set of parameters $\theta_m$, whose dimensionality $d_m$ depends on the specific model. We denote the model's prediction under parameters $\theta_m$ as $m(\cdot \mid \theta_m)$, and we represent the predicted value by $\hat{y}_m$ (i.e., $\hat{y}_m = m(\cdot \mid \theta_m)$). Crucially, our approach has two phases, which emulates well a bi-level optimization problem: the first phase (or inner problem) where the main objective is to find the optimal model structure, and the second (or outer problem) where the main objective is to fine-tune the optimal model structure and discover its optimal parameters. We define the optimal model $m^*$ as the model that minimizes the sum of the data fitting error and a penalty term proportional to the degree of constraint violation. Formally, this is expressed as:
 
-markdown<br>$$m^* = \arg\min_{m \in \mathcal{M}} \lbrace \sum_{i=1}^{n_t} \ell \left( \hat{y}_m^{(i)}, y^{(i)} \right) + \sum_{j=1}^{J} \lambda_j \, P_j(m) \rbrace,$$<br>
+```latex
+m^* = \arg\min_{m \in \mathcal{M}} \left\{ \sum_{i=1}^{n_t} \ell \!\left( \hat{y}_m^{(i)}, y^{(i)} \right) + \sum_{j=1}^{J} \lambda_j P_j(m) \right\}
+```
 
 where $P_j(m)$ quantifies the violation of the $j$-th constraint, $\lambda_j$ is a constant scaling factor specific to that constraint, and $J$ is the total number of constraints.
 
