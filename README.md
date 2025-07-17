@@ -42,7 +42,7 @@ This notation establishes the mathematical foundation for our methodology, facil
 ### Introduction to the Strong Formulation
 Before getting into the detailed explanations of model generation, model selection, mathematical constraints, and uncertainty quantification, we first provide a concise, itemised workflow of PI-ADoK. This overview will serve as a road-map for the discussion that follows.
 
-1. **Data collection:** Acquire time–series concentrations $\bigl(t,\;C_i(t)\bigr)$ of all reactants and products.
+1. **Data collection:** Acquire time–series concentrations $\!\bigl(t,C_i(t)\bigr)$ of all reactants and products.
 2. **Generate constrained concentration surrogates:** Employ genetic programming with embedded physical constraints (positivity, equilibrium,\,\dots) to build differentiable symbolic models $\eta_i(t)$ that fit the measured $C_i(t)$.
 3. **Parameter refinement (concentration):** Calibrate every surrogate by solving the second equation shown to obtain $\theta_{\eta_i}^{\star}$.
 4. **Model selection (concentration):** Use $\mathrm{AIC}$ to pick the most accurate yet parsimonious $\eta_i(t)$ from the model set for each chemical species in each experiment.
