@@ -21,7 +21,7 @@ In our framework, variables are represented as state vectors $x \in \mathbb{R}^{
 
 A symbolic model $m \in \mathcal{M}$ is characterized by a finite set of parameters $\theta_m$, whose dimensionality $d_m$ depends on the specific model. We denote the model's prediction under parameters $\theta_m$ as $m(\cdot \mid \theta_m)$, and we represent the predicted value by $\hat{y}_m$ (i.e., $\hat{y}_m = m(\cdot \mid \theta_m)$). Crucially, our approach has two phases, which emulates well a bi-level optimization problem: the first phase (or inner problem) where the main objective is to find the optimal model structure, and the second (or outer problem) where the main objective is to fine-tune the optimal model structure and discover its optimal parameters. We define the optimal model $m^*$ as the model that minimizes the sum of the data fitting error and a penalty term proportional to the degree of constraint violation. Formally, this is expressed as:
 
-$$m^* = \arg\min_{m \in \mathcal{M}} \lbrace \sum_{i=1}^{n_t} \ell\left( \hat{y}_m^{(i)}, y^{(i)} \right) + \sum_{j=1}^{J} \lambda_j \, P_j(m) \rbrace,$$
+$$m^* = \arg\min_{m \in \mathcal{M}} ,$$
 
 where $P_j(m)$ quantifies the violation of the $j$-th constraint, $\lambda_j$ is a constant scaling factor specific to that constraint, and $J$ is the total number of constraints.
 
@@ -63,6 +63,7 @@ Overfitting is inherently controlled at two distinct stages of the PI-ADoK workf
 
 Because the model $\eta$ is differentiable, its derivative, $\dot{\eta}(t^{(i)})$, serves as an approximation for the true rates, i.e., $\dot{\eta}(t^{(i)}) \approx r^{(i)}$. With these rate estimates in hand, we can formulate the optimization problem as follows. At the outer level, we optimize over candidate models of fixed complexity $\kappa$ by minimizing the sum of the fitting error and a penalty term that is proportional to the degree of constraint violation:
 
+$$m^\star = \arg\min_{m \in \mathcal{M}^\kappa} \lbrace \sum_{i=1}^{n_t} \ell \left(\hat{r}_m(t^{(i)} \mid \theta_m), r^{(i)}\right) + \sum_{j=1}^{J} \lambda_j \, P_j(m) \rbrace.$$
 
 At the inner level, we optimize the parameters of the selected model $m^\star$ as follows:
 
