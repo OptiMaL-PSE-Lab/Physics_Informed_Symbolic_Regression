@@ -21,7 +21,7 @@ In our framework, variables are represented as state vectors $x \in \mathbb{R}^{
 
 A symbolic model $m \in \mathcal{M}$ is characterized by a finite set of parameters $\theta_m$, whose dimensionality $d_m$ depends on the specific model. We denote the model's prediction under parameters $\theta_m$ as $m(\cdot \mid \theta_m)$, and we represent the predicted value by $\hat{y}_m$ (i.e., $\hat{y}_m = m(\cdot \mid \theta_m)$). Crucially, our approach has two phases, which emulates well a bi-level optimization problem: the first phase (or inner problem) where the main objective is to find the optimal model structure, and the second (or outer problem) where the main objective is to fine-tune the optimal model structure and discover its optimal parameters. We define the optimal model $m^*$ as the model that minimizes the sum of the data fitting error and a penalty term proportional to the degree of constraint violation. Formally, this is expressed as:
 
-$$m^* = \arg\min_{m \in \mathcal{M}} \lbrace \sum_{i=1}^{n_t} \ell \left( \hat{y}_m^{(i)}, y^{(i)} \right) + \sum_{j=1}^{J} \lambda_j \, P_j(m) \rbrace,$$
+$$m^* = \arg\min_{m \in \mathcal{M}} \lbrace \sum_{i=1}^{n_t} \ell \left( \hat{y}_m^{(i)} \right) \rbrace,$$
 
 where $P_j(m)$ quantifies the violation of the $j$-th constraint, $\lambda_j$ is a constant scaling factor specific to that constraint, and $J$ is the total number of constraints.
 
@@ -98,7 +98,7 @@ If the dataset used for model discovery is insufficient to yield an adequate mod
 
 The rationale for selecting these two models is discussed in our previous paper. The MBDoE approach adopted in this work follows the framework developed by Hunter and Reiner:
 
-$$x_0^{(new)} = \argmax_{x_0} \lbrace x_0 + \int_{t_0}^{t_f} \ell\left(\hat x_\eta \left(\tau\mid\theta_\eta^\star \right), \hat x_\mu \left(\tau\mid\theta_\mu^\star \right) \right)\, d\tau \rbrace.$$
+$$x_0^{(new)} = \arg\max_{x_0} \lbrace x_0 + \int_{t_0}^{t_f} \ell\left(\hat x_\eta \left(\tau\mid\theta_\eta^\star \right), \hat x_\mu \left(\tau\mid\theta_\mu^\star \right) \right)\, d\tau \rbrace.$$
 
 In the above equation, $\ell$ represents the SSE. Once the optimal initial conditions are determined, a new experiment can be performed to generate additional data points, which are then incorporated into the original dataset. With this enriched dataset, PI-ADoK can be executed again, thereby closing the loop between informative experimental design and optimal model discovery.
 
