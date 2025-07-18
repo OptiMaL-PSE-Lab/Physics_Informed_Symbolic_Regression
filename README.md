@@ -1377,8 +1377,6 @@ for i in range(num_datasets):
 
 </details>
 
-</details>
-
 ## Citation
 ```tex
 @misc{https://doi.org/10.48550/arxiv.2507.02730,
