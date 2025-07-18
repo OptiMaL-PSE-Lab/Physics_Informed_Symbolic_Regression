@@ -179,6 +179,7 @@ import itertools as it
 from time import perf_counter
 import matplotlib.cm as cm
 import os
+from scipy.stats import multivariate_normal
 ```
 
 </details>
@@ -1193,6 +1194,186 @@ a, b = Opt_Rout(multistart, number_parameters, lower_bound, upper_bound, to_opt,
 
 print('Optimal experiment: ', b)
 ```
+
+</details>
+
+#### Uncertainty Quantification and Propagation
+Once the practitioner has found a satisfactory kinetic model (or the experimental budget has been spent), PI-ADoK will quantify the uncertainty of the model's parameters and then propagate this uncertainty to the prediction of the state variables.
+
+<details>
+<summary>Show code</summary>
+
+```python
+# --- the data --- #
+num_datasets = 5
+t_obs = np.linspace(0.0, 10.0, 15)
+z_obs = [
+    pd.read_csv('physics_informed_SR/Decomposition_Nitrous_Oxide/exp_data/exp_' + str(i + 1) + '.csv', header=None).to_numpy()
+    for i in range(num_datasets)
+]
+initial_conditions = [
+    np.array([5 , 0, 0]),
+    np.array([10, 0, 0]),
+    np.array([5 , 2, 0]),
+    np.array([5 , 0, 3]),
+    np.array([0 , 2, 3])
+]
+
+# --- the dynamic model --- #
+def kinetic_model(t, state, *parameters):
+    # Unpack state variables
+    CNO, CN, CO = state
+    # Unpack parameters
+    k_1, k_2 = parameters
+    # Define the rate equations
+    common_term = ((k_1 * CNO**2) / (1 + k_2 * CNO))
+    dNOdt = -common_term
+    dNdt = common_term
+    dOdt = (1/2) * common_term
+    return np.array([dNOdt, dNdt, dOdt])
+
+# --- the prior for the parameters --- #
+def prior(parameters):
+    prior_means = np.array([1.842, 4.598])
+    prior_covs = np.diag(np.array([2, 2]))
+    return multivariate_normal.pdf(parameters, mean=prior_means, cov=prior_covs)
+
+# --- the loss function (sum of squared errors) --- #
+def sse(parameters):
+    total_error = 0.0
+    timesteps = 15
+    time = np.linspace(0, 10, timesteps)
+    t_span = [0, np.max(time)]
+    for i in range(num_datasets):
+        ic = initial_conditions[i]
+        # Pass parameters as a tuple so that kinetic_model can unpack them
+        sol = solve_ivp(kinetic_model, t_span, ic, t_eval=time, method="RK45", args=tuple(parameters))
+        total_error += np.sum((sol.y - z_obs[i])**2)
+    return total_error
+
+# --- Define the likelihood based on the SSE --- #
+def likelihood(parameters):
+    # Assuming a Gaussian likelihood with variance=1 for simplicity.
+    return np.exp(-sse(parameters) / 2.0)
+
+# --- Bayesian Inference using Metropolis-Hastings --- #
+def metropolis_hastings(initial_parameters, num_samples, proposal_std):
+    current_parameters = np.array(initial_parameters)
+    samples = []
+    for i in range(num_samples):
+        # Propose new parameters from a symmetric Gaussian proposal
+        proposed_parameters = np.random.normal(current_parameters, proposal_std)
+        # Ensure parameters remain non-negative (if that is required)
+        proposed_parameters = np.maximum(proposed_parameters, 0)
+        
+        # Compute the target densities (likelihood * prior)
+        current_target = likelihood(current_parameters) * prior(current_parameters)
+        proposed_target = likelihood(proposed_parameters) * prior(proposed_parameters)
+        
+        # Compute acceptance ratio and ensure it is at most 1
+        acceptance_ratio = min(1, proposed_target / current_target)
+        
+        if i % 100 == 0:
+            print(f"Iteration: {i}")
+        
+        # Accept or reject the proposed move
+        if np.random.rand() < acceptance_ratio:
+            current_parameters = proposed_parameters
+        
+        samples.append(current_parameters.copy())
+    
+    return np.array(samples)
+
+# --- Example usage --- #
+initial_parameters = np.array([2, 5]) + np.random.normal(0, 1, 2)
+num_samples = 1000 * 10  # e.g., 10,000 samples
+proposal_std = np.array([0.15, 0.15]) * 1  # standard deviation for proposals
+
+samples = metropolis_hastings(initial_parameters, num_samples, proposal_std)
+
+# --- Plot the posterior distributions of the parameters --- #
+plt.figure(figsize=(12, 8))
+num_params = samples.shape[1]
+colors = ['royalblue', 'salmon', 'limegreen']
+
+for i in range(num_params):
+    ax = plt.subplot(1, num_params, i + 1)
+    ax.hist(samples[:, i], bins=50, density=True, alpha=0.7, color=colors[i % len(colors)])
+    ax.set_title(f"Parameter {i + 1}", fontsize=28)
+    ax.set_xlabel('Value', fontsize=28)
+    if i == 0:
+        ax.set_ylabel('Density', fontsize=28)
+    ax.tick_params(axis = 'both', which = 'major', labelsize = 28)
+    ax.grid(True, linestyle='--', alpha=0.5)
+
+plt.tight_layout()
+#plt.show()
+
+# --- Prediction and Uncertainty Plot for All Experiments ---
+
+# Define colors and species labels
+color_1 = ['salmon', 'royalblue', 'darkviolet', 'limegreen']
+species = ['NO', 'N', 'O']
+num_species = len(species)
+
+# Define a time grid (consistent with your data)
+time = np.linspace(0, 10, 15)
+
+# Define burn-in: here we discard 10% of the samples.
+burn_in = int(0.1 * len(samples))
+posterior_samples = samples[burn_in:]
+n_post = posterior_samples.shape[0]
+
+# Loop over each experiment (dataset)
+for i in range(num_datasets):
+    # Create a new figure for the current experiment
+    fig, ax = plt.subplots()
+    
+    # Get the initial condition for the current experiment
+    ic = initial_conditions[i]
+    
+    # Preallocate an array to hold predictions.
+    # Dimensions: (number of posterior samples, number of species, number of time points)
+    pred_samples = np.zeros((n_post, 3, len(time)))
+    
+    # For each posterior sample, simulate the kinetic model over the time grid.
+    for j in range(n_post):
+        # Use tuple(posterior_samples[j]) so that kinetic_model can unpack the parameters
+        sol = solve_ivp(kinetic_model, [time[0], time[-1]], ic, t_eval=time, method="RK45", 
+                        args=tuple(posterior_samples[j]))
+        pred_samples[j, :, :] = sol.y
+
+    # Loop over each species (T, H, B, M)
+    for k in range(num_species):
+        # Format the axes
+        ax.set_ylabel("Concentration $(M)$", fontsize=18)
+        ax.set_xlabel("Time $(h)$", fontsize=18)
+        ax.spines["right"].set_visible(False)
+        ax.spines["top"].set_visible(False)
+        ax.tick_params(axis='both', which='major', labelsize=18)
+        ax.grid(alpha=0.5)
+        
+        # Plot the experimental data for experiment i and species k
+        ax.plot(time, z_obs[i][k, :], '.', label=species[k], color=color_1[k], markersize=10)
+        
+        # Extract predictions for species k across all posterior samples
+        species_predictions = pred_samples[:, k, :]
+        ave_mean = np.mean(species_predictions, axis=0)
+        ave_std = np.std(species_predictions, axis=0)
+        upper_bound = ave_mean + 3 * ave_std
+        lower_bound = ave_mean - 3 * ave_std
+        
+        # Plot the mean prediction as a solid line
+        ax.plot(time, ave_mean, '-', color=color_1[k], linewidth=2)
+        # Plot the uncertainty as a shaded region
+        ax.fill_between(time, lower_bound, upper_bound, color=color_1[k], alpha=0.5)
+
+    ax.legend(loc='upper right', fontsize=15)
+    # ax.set_title(f"Experiment {i+1}", fontsize=18)
+    plt.tight_layout()
+    # plt.show()
+```
+</details>
 
 </details>
 
