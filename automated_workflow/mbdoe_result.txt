@@ -1,3 +1,0 @@
-INCOMPLETE
-Iterations: 20
-Experiments: 24

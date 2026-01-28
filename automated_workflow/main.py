@@ -15,6 +15,7 @@ import subprocess
 import os
 import sys
 import importlib.util
+import importlib
 import numpy as np
 
 # Ensure current directory is in path for imports
@@ -129,6 +130,9 @@ def main_with_mbdoe():
     mbdoe = load_module('mbdoe', os.path.join(base_dir, '6_mbdoe.py'))
     
     for iteration in range(1, config.MAX_ITERATIONS + 1):
+        # Reload config at start of each iteration to get updated NUM_EXP
+        importlib.reload(config)
+        
         print(f"\n{'=' * 60}")
         print(f"   ITERATION {iteration} / {config.MAX_ITERATIONS}")
         print(f"   Number of experiments: {config.NUM_EXP}")
@@ -174,7 +178,13 @@ def main_with_mbdoe():
             print("\n[ORCHESTRATOR] Model not correct. Running MBDoE...")
             
             if second_best_model and second_best_model != best_model:
-                new_ic = mbdoe.find_optimal_experiment(best_model, second_best_model)
+                new_ic = mbdoe.find_optimal_experiment(
+                    best_model, 
+                    second_best_model,
+                    iteration=iteration,
+                    best_aic=result.get('best_aic'),
+                    second_best_aic=result.get('second_best_aic')
+                )
             else:
                 # Fallback: random experiment in bounds
                 print("  Using random IC (no competing models)")

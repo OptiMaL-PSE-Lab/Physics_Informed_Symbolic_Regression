@@ -1,11 +1,10 @@
 
 import Pkg
 # Activate environment in sibling directory if it exists, otherwise assume current
-csv_path = "../physics_informed_SR"
-if isdir(csv_path)
-    Pkg.activate(csv_path)
-
-end
+script_dir = @__DIR__
+project_path = joinpath(dirname(script_dir), "physics_informed_SR")
+Pkg.activate(project_path)
+Pkg.instantiate()
 
 using SymbolicRegression
 using DelimitedFiles
@@ -14,8 +13,9 @@ using DelimitedFiles
 num_datasets = length(ARGS) > 0 ? parse(Int, ARGS[1]) : 5
 
 # Paths
-const_dir = "const_data"
-hof_dir = "hof_files"
+const_dir = joinpath(script_dir, "const_data")
+hof_dir = joinpath(script_dir, "hof_files")
+
 
 num_states = 2
 
@@ -47,7 +47,7 @@ for j in 1:num_states
         species = "A"
         name = joinpath(hof_dir, "hall_of_fame_rate_A$num_datasets.csv")
         rate_path = joinpath(const_dir, "rate_data_A.csv")
-        
+
         # Original options for A with constraints
         options = Options(
             binary_operators=[+, *, /, -],
@@ -61,15 +61,16 @@ for j in 1:num_states
             constraint_always_negative=true,
             constraint_always_increasing=true,
             constraint_always_decreasing=false,
-            hofFile=name
+            hofFile=name,
+            verbosity=0
         )
         iterations = 400
-        
+
     elseif j == 2
         species = "B"
         name = joinpath(hof_dir, "hall_of_fame_rate_B$num_datasets.csv")
         rate_path = joinpath(const_dir, "rate_data_B.csv")
-        
+
         # Original options for B with constraints
         options = Options(
             binary_operators=[+, *, /, -],
@@ -83,19 +84,20 @@ for j in 1:num_states
             constraint_always_negative=false,
             constraint_always_increasing=false,
             constraint_always_decreasing=true,
-            hofFile=name
+            hofFile=name,
+            verbosity=0
         )
         iterations = 200
     end
-    
+
     if !isfile(rate_path)
-         println("Error: $rate_path not found.")
-         continue
+        println("Error: $rate_path not found.")
+        continue
     end
-    
+
     rate_data = readdlm(rate_path, ',', Float64, '\n')
     y = reshape(rate_data, 1, :)
-    
+
     println("  Running SR for Rate Model $species...")
     equation_search(
         X, y, niterations=iterations, options=options, parallelism=:serial, variable_names=["A", "B"]

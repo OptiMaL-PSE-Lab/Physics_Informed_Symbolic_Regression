@@ -131,23 +131,9 @@ def rate_model(z0, equations, t, t_eval, event):
 
     def nest(t, z):
         # Assuming A and B are z[0] and z[1]
-        try:
-            dAdt = eval(str(local_eqs[0]))
-            # B consumption is generally negative of A if 1:1, or per original code
-            # Original code: dBdt = (-1) * (-k... ) which was dAdt.
-            # Here we assume the reaction is reversible A <-> B or similar so rate of A is - rate of B?
-            # The original code has:
-            # dAdt = ...
-            # dBdt = (-1) * ... 
-            # In the `rate_model` function in saving_rates.py:
-            # dAdt = eval(str(equations[0]))
-            # dBdt = (-1) * eval(str(equations[0]))
-            # So it assumes linked rates.
-            dBdt = (-1) * dAdt
-            return [dAdt, dBdt]
-        except Exception as e:
-            # Fallback for evaluation errors
-            return [0, 0]
+        dAdt = eval(str(local_eqs[0]))
+        dBdt = (-1) * dAdt
+        return [dAdt, dBdt]
 
     sol = solve_ivp(nest, t, z0, t_eval = t_eval, method = "RK45", events = event)  
     return sol.y, sol.t, sol.status

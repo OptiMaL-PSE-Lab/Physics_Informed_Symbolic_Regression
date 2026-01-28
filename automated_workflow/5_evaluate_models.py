@@ -11,6 +11,21 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import config
 import utils
 
+# Global variable for timeout tracking (same pattern as saving_rates.py)
+time_in = 0
+
+def my_event(t, y):
+    """Event function for solve_ivp to timeout if ODE takes too long (> 2 seconds)."""
+    global time_in
+    time_out = perf_counter()
+    
+    if (time_out - time_in) > 2:
+        return 0  # Triggers termination
+    else:
+        return 1  # Continue solving
+
+my_event.terminal = True
+
 def evaluate_models():
     print("Evaluating rate models...")
     
@@ -22,11 +37,12 @@ def evaluate_models():
         df = pd.read_csv(filepath, header=None)
         in_silico_data["exp_" + str(i + 1)] = df.values
 
-    # Load rate models
+    # Load rate models - only A models (same as saving_rates.py)
+    # The stoichiometric constraint dB/dt = -dA/dt is applied in utils.rate_model()
     GP_models = {}
+    params = []
     
-    # Assuming file naming convention from original code
-    # hall_of_fame_rate_A{num_exp}.csv
+    # Load A and B models for reference, but only use A for evaluation
     for i in range(config.NUM_SPECIES):
         species_name = config.SPECIES[i]
         filename = f"hall_of_fame_rate_{species_name}{config.NUM_EXP}.csv"
@@ -38,33 +54,16 @@ def evaluate_models():
 
         a, b = utils.rate_n_param(filepath)
         GP_models[f"{species_name}_models", f"{species_name}_params"] = a, b
+        params.append(b)
 
-    # Create all combinations of ODEs
-    equations = []
-    # Order: A_models, A_params, B_models, B_params
-    names = []
-    for s in config.SPECIES:
-        names.append(f"{s}_models")
-        names.append(f"{s}_params")
-    
-    all_models = []
-    params = []
-
-    for i in range(0, len(names), 2):
-        if (names[i], names[i+1]) in GP_models:
-            all_models.append(GP_models[names[i], names[i + 1]][0])
-            params.append(GP_models[names[i], names[i + 1]][1])
-        else:
-            print(f"Missing models for {names[i]}")
-            return
-
-    all_ODEs = list(it.product(*all_models))
-    param_ODEs = list(it.product(*params))
-    
+    # Only use A models (same as saving_rates.py line 509)
+    # The B rate is constrained: dB/dt = -dA/dt
+    all_ODEs = GP_models["A_models", "A_params"][0]
     number_models = len(all_ODEs)
+    all_ODEs = [[x] for x in all_ODEs]  # Wrap each in a list for rate_model compatibility
     AIC_values = np.zeros(number_models)
     
-    print(f"Evaluating {number_models} model combinations...")
+    print(f"Evaluating {number_models} A models (with dB/dt = -dA/dt constraint)...")
     
     time = np.array(config.TIME_EVAL)
     
@@ -74,12 +73,13 @@ def evaluate_models():
             print(f"Evaluating model {i}/{number_models}")
 
         for j in range(config.NUM_EXP):
+            global time_in
             experiments = in_silico_data["exp_" + str(j + 1)]
             ics = config.INITIAL_CONDITIONS["ic_" + str(j + 1)]
             
-            # Solve ODE
-            # rate_model signature: z0, equations, t, t_eval, event
-            y, tt, status = utils.rate_model(ics, list(all_ODEs[i]), [0, np.max(time)], list(time), utils.my_event)
+            # Reset timer before solving ODE (same pattern as saving_rates.py)
+            time_in = perf_counter()
+            y, tt, status = utils.rate_model(ics, list(all_ODEs[i]), [0, np.max(time)], list(time), my_event)
 
             if status != 0 and status != 1: # Success is usually 0 (end of time) or 1 (event)
                  neg_log = 1e99
@@ -94,7 +94,8 @@ def evaluate_models():
             
             neg_log += utils.NLL_kinetics(experiments, y, config.NUM_SPECIES, config.TIMESTEPS)
 
-        num_parameters = np.sum(np.array(param_ODEs[i]))
+        # Use params[0][i] for A model parameters (same as saving_rates.py line 537)
+        num_parameters = np.sum(np.array(params[0][i]))
         AIC_values[i] = 2 * neg_log + 2 * num_parameters
 
     # Find best and second-best models
@@ -102,16 +103,19 @@ def evaluate_models():
     best_model_index = sorted_indices[0]
     second_best_index = sorted_indices[1] if len(sorted_indices) > 1 else sorted_indices[0]
     
+    third_best_index = sorted_indices[2] if len(sorted_indices) > 2 else sorted_indices[0]
+    
     best_model = all_ODEs[best_model_index]
     second_best_model = all_ODEs[second_best_index]
+    third_best_model = all_ODEs[third_best_index]
     
     print("\n--------------------------------------------------")
-    print(f"Best Model Index: {best_model_index}")
-    print(f"Best Model Equations: {best_model}")
-    print(f"AIC: {AIC_values[best_model_index]}")
-    print(f"\nSecond Best Model Index: {second_best_index}")
-    print(f"Second Best Model Equations: {second_best_model}")
-    print(f"AIC: {AIC_values[second_best_index]}")
+    print(f"Best Model: {best_model}")
+    print(f"Second Best Model: {second_best_model}")
+    print(f"Third Best Model: {third_best_model}")
+    print("----------------------")
+    print(f"All AIC values: {AIC_values}")
+    print(f"Sorted indices: {sorted_indices}")
     print("--------------------------------------------------\n")
     
     # Save results to file
@@ -127,8 +131,10 @@ def evaluate_models():
     return {
         'best_model': best_model[0] if best_model else None,
         'second_best_model': second_best_model[0] if second_best_model else None,
+        'third_best_model': third_best_model[0] if third_best_model else None,
         'best_aic': AIC_values[best_model_index],
         'second_best_aic': AIC_values[second_best_index],
+        'third_best_aic': AIC_values[third_best_index],
         'all_aic': AIC_values
     }
 

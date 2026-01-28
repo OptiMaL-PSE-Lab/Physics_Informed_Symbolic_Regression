@@ -1,9 +1,16 @@
 """
 Model Checker - Compares discovered SR model to the true kinetic model.
-Checks for STRUCTURAL match (algebraic form), not exact coefficient values.
+Checks that the discovered model has coefficients PRESENT where expected.
 
-Example: (-7*A + 3*B) / (4*A + 2*B + 6) should match
-         (-1.5*A + 0.8*B) / (2*A + 1*B + 3) because they have the same structure.
+The actual coefficient VALUES don't matter - only that they exist (are not 1).
+
+Example TRUE model: (-7*A + 3*B) / (4*A + 2*B + 6)
+
+  PASS: (-6*A + 2*B) / (5*A + 8*B + 3)  
+        → Has coefficients on all terms (values differ, but that's OK)
+        
+  FAIL: (A + B) / (A + 2*B + 6)
+        → Missing coefficients on A and B in numerator, and A in denominator
 """
 
 import numpy as np
@@ -111,6 +118,118 @@ def structures_match(struct1, struct2):
     return True
 
 
+def extract_coefficients(poly_expr, variables):
+    """
+    Extract the coefficients of each monomial term in a polynomial.
+    
+    Returns a dict: {(power_A, power_B): coefficient_value}
+    E.g., 4*A + 2*B + 6 -> {(1,0): 4, (0,1): 2, (0,0): 6}
+    """
+    try:
+        expanded = expand(poly_expr)
+        
+        if expanded.is_number:
+            return {(0, 0): float(expanded)}
+        
+        poly = Poly(expanded, *variables)
+        coeffs = {}
+        for monom, coeff in zip(poly.monoms(), poly.coeffs()):
+            coeffs[monom] = float(coeff)
+        
+        return coeffs
+    except Exception as e:
+        return None
+
+
+def coefficients_present_match(struct1, struct2, unity_tolerance=0.1):
+    """
+    Check if coefficients are PRESENT where expected.
+    
+    A coefficient is "present" if its absolute value is NOT close to 1.0.
+    This checks that the discovered model has explicit coefficients (not just 1)
+    on the same terms where the true model has coefficients.
+    
+    Args:
+        struct1: Discovered model structure
+        struct2: True model structure  
+        unity_tolerance: How close to 1.0 to be considered "no coefficient" (default 0.1)
+    
+    Returns:
+        (match: bool, details: str)
+    """
+    if struct1 is None or struct2 is None:
+        return False, "Structure extraction failed"
+    
+    def has_explicit_coefficient(coeff_value, tolerance=0.1):
+        """Check if a coefficient is explicitly present (not 1 or -1)."""
+        return abs(abs(coeff_value) - 1.0) > tolerance
+    
+    def compare_coefficient_presence(expr1, expr2, part_name):
+        coeffs1 = extract_coefficients(expr1, [A, B])
+        coeffs2 = extract_coefficients(expr2, [A, B])
+        
+        if coeffs1 is None or coeffs2 is None:
+            return False, f"Could not extract coefficients from {part_name}"
+        
+        # Check same monomials (structural match)
+        if set(coeffs1.keys()) != set(coeffs2.keys()):
+            return False, f"Different terms in {part_name}"
+        
+        # For each term, check if coefficient presence matches
+        missing_coeffs = []
+        for monom in coeffs2:
+            true_coeff = coeffs2[monom]
+            disc_coeff = coeffs1[monom]
+            
+            true_has_coeff = has_explicit_coefficient(true_coeff)
+            disc_has_coeff = has_explicit_coefficient(disc_coeff)
+            
+            # If true model has a coefficient, discovered must also have one
+            if true_has_coeff and not disc_has_coeff:
+                term_name = _monom_to_str(monom)
+                missing_coeffs.append(f"{term_name} (discovered={disc_coeff:.2f}, expected coeff like {true_coeff:.2f})")
+        
+        if missing_coeffs:
+            return False, f"Missing coefficients in {part_name}: {', '.join(missing_coeffs)}"
+        
+        return True, f"{part_name} has all required coefficients"
+    
+    # Compare numerator coefficient presence
+    num_match, num_detail = compare_coefficient_presence(
+        struct1['numer_expr'], struct2['numer_expr'], "numerator"
+    )
+    if not num_match:
+        return False, num_detail
+    
+    # Compare denominator coefficient presence
+    den_match, den_detail = compare_coefficient_presence(
+        struct1['denom_expr'], struct2['denom_expr'], "denominator"
+    )
+    if not den_match:
+        return False, den_detail
+    
+    return True, "All required coefficients are present"
+
+
+def _monom_to_str(monom):
+    """Convert a monomial tuple to a string representation."""
+    a_pow, b_pow = monom
+    if a_pow == 0 and b_pow == 0:
+        return "const"
+    elif a_pow == 1 and b_pow == 0:
+        return "A"
+    elif a_pow == 0 and b_pow == 1:
+        return "B"
+    elif a_pow == 2 and b_pow == 0:
+        return "A²"
+    elif a_pow == 0 and b_pow == 2:
+        return "B²"
+    elif a_pow == 1 and b_pow == 1:
+        return "A*B"
+    else:
+        return f"A^{a_pow}*B^{b_pow}"
+
+
 def describe_structure(struct):
     """Human-readable description of a structure."""
     if struct is None:
@@ -147,19 +266,24 @@ def describe_structure(struct):
         return numer_desc
 
 
-def check_structural_match(discovered_model, true_model):
+def check_exact_match(discovered_model, true_model, tolerance=0.05):
     """
-    Check if discovered model has the same STRUCTURE as the true model.
-    Coefficients can differ, only the algebraic form must match.
+    Check if discovered model has the same structure AND has coefficients present
+    where the true model has them.
     
-    Returns: (is_structural_match, similarity_score, structure_descriptions)
+    Args:
+        discovered_model: String representation of the discovered equation
+        true_model: String representation of the true equation
+        tolerance: Not used for value comparison, kept for API compatibility
+    
+    Returns: (is_match, is_structural_match, similarity_score, details)
     """
     # Parse models
     discovered_expr = parse_model_to_sympy(discovered_model)
     true_expr = parse_model_to_sympy(true_model)
     
     if discovered_expr is None or true_expr is None:
-        return False, 0.0, ("Parse error", "Parse error")
+        return False, False, 0.0, {"error": "Parse error"}
     
     # Extract structures
     disc_struct = extract_structure(discovered_expr)
@@ -168,8 +292,14 @@ def check_structural_match(discovered_model, true_model):
     disc_desc = describe_structure(disc_struct)
     true_desc = describe_structure(true_struct)
     
-    # Check structural match
-    is_match = structures_match(disc_struct, true_struct)
+    # Check structural match first
+    is_structural_match = structures_match(disc_struct, true_struct)
+    
+    # Check coefficient presence (only if structural match passes)
+    is_coeff_present = False
+    coeff_detail = "Structure mismatch - coefficients not checked"
+    if is_structural_match:
+        is_coeff_present, coeff_detail = coefficients_present_match(disc_struct, true_struct)
     
     # Calculate numerical similarity for reference
     try:
@@ -207,69 +337,85 @@ def check_structural_match(discovered_model, true_model):
     except:
         similarity = 0.0
     
-    return is_match, similarity, (disc_desc, true_desc)
+    details = {
+        'disc_structure': disc_desc,
+        'true_structure': true_desc,
+        'coeff_detail': coeff_detail
+    }
+    
+    # Match requires both structural match and coefficient presence
+    is_match = is_structural_match and is_coeff_present
+    
+    return is_match, is_structural_match, similarity, details
 
 
-def check_discovered_model(best_model_equation):
+def check_discovered_model(best_model_equation, tolerance=0.05):
     """
-    Main function to check if the best discovered model has the same
-    STRUCTURAL FORM as the true model (coefficients don't need to match).
+    Check if the discovered model has correct structure AND coefficients present
+    where expected (values don't need to match, just presence of non-unity coefficients).
     
     Args:
         best_model_equation: String representation of the rate equation for species A
+        tolerance: Not used, kept for API compatibility
         
     Returns:
-        (is_structural_match, similarity_score)
+        (is_exact_match, similarity_score)
     """
     true_model = config.TRUE_MODEL
     
-    print(f"Model Check (Structural Match):")
+    print(f"Model Check (Exact Match with Coefficients):")
     print(f"  Discovered: {best_model_equation}")
     print(f"  True:       {true_model}")
+    print(f"  Tolerance:  {tolerance*100:.0f}%")
     
-    is_match, similarity, (disc_struct, true_struct) = check_structural_match(
-        best_model_equation, true_model
+    is_exact, is_structural, similarity, details = check_exact_match(
+        best_model_equation, true_model, tolerance
     )
     
-    print(f"  Discovered structure: {disc_struct}")
-    print(f"  True structure:       {true_struct}")
+    print(f"  Discovered structure: {details['disc_structure']}")
+    print(f"  True structure:       {details['true_structure']}")
     print(f"  Numerical similarity: {similarity:.4f}")
-    print(f"  STRUCTURAL Match: {'YES ✓' if is_match else 'NO ✗'}")
+    print(f"  STRUCTURAL Match: {'YES ✓' if is_structural else 'NO ✗'}")
+    print(f"  Coefficient detail: {details['coeff_detail']}")
+    print(f"  EXACT Match (with coefficients): {'YES ✓' if is_exact else 'NO ✗'}")
     
-    return is_match, similarity
+    return is_exact, similarity
 
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("Testing STRUCTURAL match (coefficients can differ)")
+    print("Testing coefficient PRESENCE matching")
+    print("(structure must match AND coefficients must be present where expected)")
     print("=" * 60)
     
-    # Test 1: Exact same structure and coefficients
-    print("\n--- Test 1: Exact same ---")
+    # Test 1: Exact same coefficients - should PASS
+    print("\n--- Test 1: Exact same coefficients (should PASS) ---")
     test_model = "(-7*A + 3*B) / (4*A + 2*B + 6)"
     is_match, score = check_discovered_model(test_model)
     print(f"Result: Match={is_match}")
     
-    # Test 2: Same STRUCTURE, different coefficients
-    print("\n--- Test 2: Same structure, different coefficients ---")
-    test_model_2 = "(-1.5*A + 0.8*B) / (2*A + 1*B + 3)"
+    # Test 2: Different coefficient VALUES but all present - should PASS
+    print("\n--- Test 2: Different values but coefficients present (should PASS) ---")
+    test_model_2 = "(-6*A + 2*B) / (5*A + 8*B + 3)"
     is_match_2, score_2 = check_discovered_model(test_model_2)
     print(f"Result: Match={is_match_2}")
     
-    # Test 3: Different structure (no constant in denominator)
-    print("\n--- Test 3: Different structure (missing constant) ---")
-    test_model_3 = "(-7*A + 3*B) / (4*A + 2*B)"
+    # Test 3: Missing coefficients (values are 1) - should FAIL
+    print("\n--- Test 3: Missing coefficients on A,B in numerator (should FAIL) ---")
+    test_model_3 = "(A + B) / (4*A + 2*B + 6)"
     is_match_3, score_3 = check_discovered_model(test_model_3)
     print(f"Result: Match={is_match_3}")
     
-    # Test 4: Different structure (no B in numerator)
-    print("\n--- Test 4: Different structure (missing B term) ---")
-    test_model_4 = "(-7*A) / (4*A + 2*B + 6)"
+    # Test 4: Missing coefficient only on A in denominator - should FAIL
+    print("\n--- Test 4: Missing coefficient on A in denominator (should FAIL) ---")
+    test_model_4 = "(-7*A + 3*B) / (A + 2*B + 6)"
     is_match_4, score_4 = check_discovered_model(test_model_4)
     print(f"Result: Match={is_match_4}")
     
-    # Test 5: Completely different structure
-    print("\n--- Test 5: Completely different ---")
-    test_model_5 = "A * B / (A + B)"
+    # Test 5: Different structure - should FAIL
+    print("\n--- Test 5: Different structure (should FAIL) ---")
+    test_model_5 = "(-7*A + 3*B) / (4*A + 2*B)"
     is_match_5, score_5 = check_discovered_model(test_model_5)
     print(f"Result: Match={is_match_5}")
+
+
